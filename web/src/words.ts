@@ -58,6 +58,7 @@ export const ROLE: Record<Role, string> = {
   outcome_owner: "Outcome owner",
   builder: "Builder",
   observer: "Observer",
+  reviewer: "Reviewer",
 };
 
 export const FORMAT: Record<ExportFormat, string> = {

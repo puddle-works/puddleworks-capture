@@ -185,21 +185,26 @@ today's `standalone_test.ts`) fails the build if anything imports swamp, reads
 `outcomeOwnerId`, `status`, `createdAt`, `updatedAt`, `closedReason?`.
 
 **Participant**: `requestId`, `userId`, `role` ∈
-`outcome_owner | builder |
-observer`, `invitedBy`, `joinedAt`. Permissions come
-from role, checked on the server:
+`outcome_owner | builder | observer | reviewer`, `invitedBy`, `joinedAt`.
+Permissions come from role, checked on the server:
 
-| Action                         | Outcome owner | Builder              | Observer |
-| ------------------------------ | ------------- | -------------------- | -------- |
-| Read request, discussion, spec | ✓             | ✓                    | ✓        |
-| Post message, ask question     | ✓             | ✓                    | –        |
-| Resolve a question             | ✓             | ✓                    | –        |
-| Edit spec draft                | ✓             | ✓                    | –        |
-| Mark ready for agreement       | ✓             | ✓                    | –        |
-| **Agree**                      | ✓ only        | –                    | –        |
-| Invite / remove participants   | ✓             | invite builders only | –        |
-| Withdraw                       | ✓             | –                    | –        |
-| Export                         | ✓             | ✓                    | –        |
+| Action                         | Outcome owner | Builder                   | Observer | Reviewer |
+| ------------------------------ | ------------- | ------------------------- | -------- | -------- |
+| Read request, discussion, spec | ✓             | ✓                         | ✓        | ✓        |
+| Post message, ask question     | ✓             | ✓                         | –        | ✓        |
+| Resolve a question             | ✓             | ✓                         | –        | –        |
+| Edit spec draft                | ✓             | ✓                         | –        | –        |
+| Mark ready for agreement       | ✓             | ✓                         | –        | –        |
+| Ask for changes                | ✓             | ✓                         | –        | ✓        |
+| **Agree**                      | ✓ only        | –                         | –        | –        |
+| Invite / remove participants   | ✓             | invite builders/reviewers | –        | –        |
+| Withdraw                       | ✓             | –                         | –        | –        |
+| Decline                        | –             | ✓                         | –        | –        |
+| Export                         | ✓             | ✓                         | –        | –        |
+
+A reviewer checks the spec while it is frozen for agreement, by asking questions
+and asking for changes. Reviewing is optional: nothing needs a reviewer on the
+request.
 
 **Message**: `id`, `requestId`, `authorId`, `kind` ∈
 `comment | question |
@@ -238,8 +243,9 @@ Draft ──submit──▶ Discussing ──propose──▶ Ready for agreemen
 
 - **Draft**: owner only, not visible to builders.
 - **Discussing**: builders can join; messages and spec drafts.
-- **Ready for agreement**: a spec version is `proposed` and frozen. Owner
-  agrees, or asks for changes (back to Discussing, new draft version).
+- **Ready for agreement**: a spec version is `proposed` and frozen. A reviewer
+  may ask questions or ask for changes. Owner agrees once no question is open,
+  or asks for changes (back to Discussing, new draft version).
 - **Agreed**: agreement recorded against an exact spec version + hash.
 - **Exported**: at least one export made. Export again any time.
 - **Revise** from Agreed/Exported: opens a new draft version; the old agreement

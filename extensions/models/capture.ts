@@ -25,6 +25,7 @@ import {
   DomainError,
   EXPORT_FORMATS,
   REQUEST_STATUSES,
+  ROLES,
   SpecificationContentSchema,
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
@@ -60,8 +61,6 @@ const id = z.string().min(1).max(100).describe(
 const withId = z.object({ as, id });
 const reason = (what: string) =>
   z.string().max(2_000).default("").describe(what);
-
-const ROLES = ["outcome_owner", "builder", "observer"] as const;
 
 const SummarySchema = z.object({
   id: z.string(),
@@ -162,7 +161,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.27.4",
+  version: "2026.10.27.5",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -180,6 +179,12 @@ export const model = {
       toVersion: "2026.10.27.4",
       description:
         "appUrl defaults to the viewer's port 3002; set values are kept",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.27.5",
+      description:
+        "A reviewer role; agree waits for open questions; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -503,7 +508,7 @@ export const model = {
       (s, who, a) => s.propose(who, a.id),
     ),
     request_changes: change(
-      "Send a proposed specification back for changes. Only the outcome owner can.",
+      "Send a proposed specification back for changes. The outcome owner, a builder or a reviewer can.",
       "Asked for changes to",
       withId.extend({ note: reason("What should change.") }),
       (s, who, a) => s.requestChanges(who, a.id, a.note),
@@ -542,11 +547,11 @@ export const model = {
     ),
 
     invite: change(
-      "Invite someone in the people list onto a request, as a builder or an observer.",
+      "Invite someone in the people list onto a request, as a builder, an observer or a reviewer.",
       "Invited someone onto",
       withId.extend({
         email: z.email().describe("Who to invite."),
-        role: z.enum(["builder", "observer"]).describe(
+        role: z.enum(["builder", "observer", "reviewer"]).describe(
           "What they will be on the request.",
         ),
       }),

@@ -93,6 +93,7 @@ const ROLE_LABELS = {
   outcome_owner: "outcome owner",
   builder: "builder",
   observer: "observer",
+  reviewer: "reviewer",
 } as const;
 
 function bullets(items: string[]): string {

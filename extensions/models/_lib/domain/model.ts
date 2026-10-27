@@ -15,7 +15,12 @@ export const TERMINAL_STATUSES: readonly RequestStatus[] = [
   "declined",
 ];
 
-export const ROLES = ["outcome_owner", "builder", "observer"] as const;
+export const ROLES = [
+  "outcome_owner",
+  "builder",
+  "observer",
+  "reviewer",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Who is acting. `isBuilder` says they are one of the platform's builders. */

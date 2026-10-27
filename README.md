@@ -54,9 +54,10 @@ swamp behavior run viewer serve --input port=3002   # until Ctrl-C; open http://
 Every method acts as one person in the people list: `--input as=<email>`, or the
 behavior's `defaultAs` when `as` is left out. Their role on the request decides
 what they may do, as before: the outcome owner submits, agrees, withdraws and
-exports; builders join open requests and write the specification; observers
-read. There is no sign-in, so anyone who can run swamp in the repository can act
-as anyone on the list.
+exports; builders join open requests and write the specification; reviewers ask
+questions and ask for changes; observers read. Agreeing waits until every
+question is resolved. There is no sign-in, so anyone who can run swamp in the
+repository can act as anyone on the list.
 
 ```bash
 swamp behavior run capture create_request --input title="Weekly stock counts" \
