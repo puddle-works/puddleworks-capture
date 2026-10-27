@@ -276,6 +276,44 @@ describe("@puddleworks/capture/requests", () => {
     );
   });
 
+  it("lets a reviewer ask for changes, and holds agree for open questions", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    await run("add_person", { email: "rae@example.com", name: "Rae Reviewer" });
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    await run("submit", { id });
+    await run("join_request", { as: "bea@example.com", id });
+    await run("edit_specification", {
+      as: "bea@example.com",
+      id,
+      specification: JSON.stringify(goodSpec),
+    });
+    await run("propose", { as: "bea@example.com", id });
+    await run("invite", { id, email: "rae@example.com", role: "reviewer" });
+    await run("post_message", {
+      as: "rae@example.com",
+      id,
+      kind: "question",
+      body: "What happens to a count entered twice?",
+    });
+    await expect.rejects(
+      run("agree", { id, version: "1" }),
+      expect.objectContaining({
+        message: expect.stringContaining("Resolve the open question first."),
+      }),
+    );
+    await run("request_changes", {
+      as: "rae@example.com",
+      id,
+      note: "Say what a second count does",
+    });
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "discussing" });
+  });
+
   it("discusses, invites and removes", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);

@@ -39,6 +39,19 @@ export function specificationProblems(content: SpecificationContent): string[] {
   return problems;
 }
 
+/** Agreeing, or proposing, waits until every question has an answer. */
+export function requireNoOpenQuestions(request: Request): void {
+  const open = openQuestions(request);
+  if (open.length > 0) {
+    throw new DomainError(
+      "invalid_state",
+      `Resolve the ${
+        open.length === 1 ? "open question" : `${open.length} open questions`
+      } first.`,
+    );
+  }
+}
+
 export function latestSpecification(
   request: Request,
 ): SpecificationVersion | undefined {
@@ -127,15 +140,7 @@ export function propose(request: Request, actor: Person, at: string): Request {
       `The specification isn't ready: ${problems.join(" ")}`,
     );
   }
-  const open = openQuestions(request);
-  if (open.length > 0) {
-    throw new DomainError(
-      "invalid_state",
-      `Resolve the ${
-        open.length === 1 ? "open question" : `${open.length} open questions`
-      } first.`,
-    );
-  }
+  requireNoOpenQuestions(request);
   const moved = applyTransition(request, actor, "propose", at);
   return {
     ...moved,
@@ -196,6 +201,7 @@ export function agree(
       "The specification hash is missing.",
     );
   }
+  requireNoOpenQuestions(request);
   const moved = applyTransition(request, actor, "agree", at);
   return {
     ...moved,

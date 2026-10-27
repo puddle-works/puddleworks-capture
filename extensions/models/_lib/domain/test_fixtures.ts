@@ -33,6 +33,12 @@ export const colleague: Person = {
   email: "cal@example.com",
   isBuilder: false,
 };
+export const reviewer: Person = {
+  userId: "u-reviewer",
+  name: "Rae Reviewer",
+  email: "rae@example.com",
+  isBuilder: false,
+};
 export const stranger: Person = {
   userId: "u-stranger",
   name: "Sam Stranger",

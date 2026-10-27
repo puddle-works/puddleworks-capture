@@ -29,7 +29,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "export",
     "revise",
   ],
-  // A builder may invite other builders only; inviteParticipant checks that.
+  // A builder may invite builders and reviewers only; inviteParticipant checks that.
   builder: [
     "message",
     "resolveQuestion",
@@ -42,6 +42,8 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "revise",
   ],
   observer: [],
+  // Reviews the spec while it is frozen for agreement; changes nothing in it.
+  reviewer: ["message", "requestChanges"],
 };
 
 export function can(role: Role, permission: Permission): boolean {
@@ -84,6 +86,7 @@ const ROLE_WORDS: Record<Role, string> = {
   outcome_owner: "the outcome owner",
   builder: "a builder",
   observer: "an observer",
+  reviewer: "a reviewer",
 };
 
 export function roleWords(role: Role): string {

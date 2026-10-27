@@ -183,10 +183,10 @@ export function inviteParticipant(
   at: string,
 ): Request {
   const actorRole = requirePermission(request, actor, "invite");
-  if (actorRole === "builder" && role !== "builder") {
+  if (actorRole === "builder" && role === "observer") {
     throw new DomainError(
       "not_allowed",
-      "As a builder you can invite other builders only.",
+      "As a builder you can invite builders and reviewers only.",
     );
   }
   requireOpen(request, "inviting people");
@@ -199,7 +199,7 @@ export function inviteParticipant(
   if (role === "builder" && !invitee.isBuilder) {
     throw new DomainError(
       "invalid_input",
-      `${invitee.name} isn't a builder; invite them as an observer.`,
+      `${invitee.name} isn't a builder; invite them as an observer or a reviewer.`,
     );
   }
   return {

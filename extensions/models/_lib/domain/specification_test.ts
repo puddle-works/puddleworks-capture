@@ -4,9 +4,11 @@ import {
   editSpecification,
   inviteParticipant,
   latestAgreed,
+  postMessage,
   propose,
   recordExport,
   requestChanges,
+  resolveQuestion,
   revise,
   specificationProblems,
   submit,
@@ -170,6 +172,29 @@ describe("agreement", () => {
       specHash: "hash-v1",
     }]);
     expect(latestAgreed(r)?.version).toBe(1);
+  });
+
+  it("waits until every question raised after proposing is resolved", () => {
+    const ask = (r: ReturnType<typeof readyRequest>, id: string) =>
+      postMessage(r, owner, { id, kind: "question", body: "Which week?" }, T2);
+    const v1 = { version: 1, specHash: "hash-v1" };
+    let r = ask(readyRequest(), "q1");
+    expect(() => agree(r, owner, v1, T2)).toThrowError(
+      expect.objectContaining({
+        code: "invalid_state",
+        message: "Resolve the open question first.",
+      }),
+    );
+    r = ask(r, "q2");
+    expect(() => agree(r, owner, v1, T2)).toThrowError(
+      expect.objectContaining({
+        code: "invalid_state",
+        message: "Resolve the 2 open questions first.",
+      }),
+    );
+    r = resolveQuestion(r, builder, "q1", null, T2);
+    r = resolveQuestion(r, owner, "q2", null, T2);
+    expect(agree(r, owner, v1, T2).status).toBe("agreed");
   });
 
   it("refuses to agree to a version other than the one proposed", () => {

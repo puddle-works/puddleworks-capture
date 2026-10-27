@@ -1,3 +1,4 @@
+import { openQuestions } from "./discussion.ts";
 import { DomainError } from "./errors.ts";
 import {
   type Action,
@@ -30,6 +31,7 @@ export function allowedActions(
   if (!role) return open && person.isBuilder ? ["join"] : [];
 
   const allowed: AllowedAction[] = ACTIONS.filter((action) => {
+    if (action === "agree" && openQuestions(request).length > 0) return false;
     try {
       checkTransition(request, person, action);
       return true;
