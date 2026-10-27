@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.10.27.3"
+version: "2026.10.27.4"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
