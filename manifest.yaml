@@ -1,21 +1,21 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.10.27.5"
+version: "2026.10.27.6"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
-  specification, agreed, and exported as outcome-spec/v1 JSON or Markdown.
-  Everything is kept in swamp data.
+  specification, reviewed, agreed, and exported as outcome-spec/v1 JSON or
+  Markdown. Everything is kept in swamp data.
 
   ## Models
 
   - `@puddleworks/capture/requests`: the people list and every request, with
     a method for each step: create_request (safe to retry with an
     idempotency key), submit, invite, join_request, post_message,
-    edit_specification, propose, agree, export_outcome_spec and more. Each
-    request has a number (#1, #2, …) that methods take in place of its id.
-    Each change says who is acting with `as`, and Capture's rules decide
-    what they may do.
+    edit_specification, propose, record_review, agree, export_outcome_spec
+    and more. Each request has a number (#1, #2, …) that methods take in
+    place of its id. Each change says who is acting with `as`, and Capture's
+    rules decide what they may do.
   - `@puddleworks/capture/web`: a read-only page on 127.0.0.1 showing every
     request and the people list, reloaded as the data changes.
 
@@ -23,6 +23,10 @@ description: |
 
   - `@puddleworks/capture-log-request`: log a request as a draft from
     another tool, such as puddlerouter, keyed on where it came from.
+  - `@puddleworks/capture-review-spec`: have an agent review the
+    specification up for agreement; its findings become questions the outcome
+    owner must settle before agreeing. Bring your own agent behavior, such as
+    `@mgreten/cli-agent`.
 repository: "https://github.com/puddle-works/puddleworks-capture"
 visibility: public
 license: MIT
@@ -34,6 +38,7 @@ models:
   - capture_web.ts
 workflows:
   - workflow-capture-log-request.yaml
+  - workflow-capture-review-spec.yaml
 additionalFiles:
   - README.md
   - LICENSE
