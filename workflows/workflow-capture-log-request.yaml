@@ -1,0 +1,43 @@
+id: aebff000-c16d-48bd-8f01-08d64fec1596
+name: "@puddleworks/capture-log-request"
+description: >-
+  Log a request in Capture as a draft. sourceRef is the idempotency key, so
+  logging the same thing twice gives one request. Needs a
+  @puddleworks/capture/requests behavior named capture, with defaultAs set to
+  the person the requests are logged for.
+version: 1
+tags:
+  maxReruns: "3"
+  maxWallClock: "2m"
+inputs:
+  type: object
+  properties:
+    title:
+      type: string
+      description: A short name for the request (at most 200 characters).
+    description:
+      type: string
+      description: What is wanted, in the requester's words.
+    currentProcess:
+      type: string
+      description: How it is done today, if at all.
+      default: ""
+    sourceRef:
+      type: string
+      description: >-
+        Where the request came from, such as a puddlerouter turn id. The same
+        sourceRef always gives the same request.
+  required: [title, description, sourceRef]
+jobs:
+  - name: main
+    steps:
+      - name: create-request
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: create_request
+          inputs:
+            title: ${{ inputs.title }}
+            description: ${{ inputs.description }}
+            currentProcess: ${{ inputs.currentProcess }}
+            idempotencyKey: ${{ inputs.sourceRef }}
