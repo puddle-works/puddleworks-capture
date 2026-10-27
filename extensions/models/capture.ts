@@ -14,6 +14,7 @@
  * - `person`: someone in the people list (`person-<userId>`).
  * - `view`: one request as the person asking sees it (`view-<id>`).
  * - `requestList`: the requests in one scope and status (`requests-<scope>-<status>`).
+ * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
  * - `outcomeSpec`: an exported outcome-spec/v1 document (`outcome-spec-<id>`).
  * - `outcomeSpecMarkdown`: the same, as Markdown (`outcome-spec-md-<id>`).
  * - `importResult`: what the last import brought in (`import-latest`).
@@ -25,6 +26,7 @@ import {
   DomainError,
   EXPORT_FORMATS,
   REQUEST_STATUSES,
+  REVIEW_VERDICTS,
   ROLES,
   SpecificationContentSchema,
 } from "./_lib/domain/index.ts";
@@ -161,7 +163,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.27.5",
+  version: "2026.10.27.6",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -185,6 +187,11 @@ export const model = {
       toVersion: "2026.10.27.5",
       description:
         "A reviewer role; agree waits for open questions; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.27.6",
+      description: "Agent review of the frozen spec; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -250,6 +257,18 @@ export const model = {
         items: z.array(SummarySchema),
         truncated: z.boolean(),
         fetchedAt: z.string(),
+      }),
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    reviewPrompt: {
+      description:
+        "What a reviewer is asked about the specification up for agreement, and which version it is.",
+      schema: z.object({
+        requestId: z.string(),
+        number: z.number().int().nullable(),
+        version: z.number().int(),
+        prompt: z.string(),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 10,
@@ -616,6 +635,55 @@ export const model = {
           { content: a.specification, basedOnMessageIds: a.basedOnMessageIds },
           a.ifMatch ?? null,
         ),
+    ),
+
+    review_prompt: {
+      description:
+        "Write what a reviewer is asked about the specification up for agreement. Only a reviewer on the request can.",
+      arguments: withId,
+      execute: (args: { as?: string; id: string }, context: CaptureContext) =>
+        run(context, async (services, store) => {
+          const { stored, version, prompt } = await services.reviewPrompt(
+            actingAs(args, context),
+            args.id,
+          );
+          // Named by id, as args.id may be the request's number.
+          const { id } = stored.request;
+          store.add(
+            await context.writeResource("reviewPrompt", `review-prompt-${id}`, {
+              requestId: id,
+              number: stored.number,
+              version,
+              prompt,
+            }),
+          );
+          context.logger.info(
+            "Wrote the review prompt for version {version} of request #{number} ({id})",
+            { version, number: stored.number, id },
+          );
+        }),
+    },
+    record_review: change(
+      "Record a review of the specification up for agreement: each finding becomes a question, the verdict a decision, and a major revision or not_safe asks for changes. Only a reviewer on the request can.",
+      "Recorded a review of",
+      withId.extend({
+        review: z.preprocess(
+          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+          z.object({
+            verdict: z.enum(REVIEW_VERDICTS),
+            summary: z.string().max(2_000).optional(),
+            findings: z.array(
+              z.object({ id: z.string(), text: z.string() }),
+            ),
+          }),
+        ).describe(
+          "{ verdict: ready | minor_revision | major_revision | not_safe, summary?, findings: [{ id, text }] }, as an object or JSON text.",
+        ),
+        version: z.coerce.number().int().min(1).optional().describe(
+          "The version reviewed. If another version is up for agreement now, the review is refused.",
+        ),
+      }),
+      (s, who, a) => s.recordReview(who, a.id, a.review, a.version),
     ),
 
     export_outcome_spec: {

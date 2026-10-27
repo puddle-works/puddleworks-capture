@@ -33,6 +33,7 @@ putting it in front of people is
 | `@puddleworks/capture/requests`               | The people list and every request, and the methods that change them |
 | `@puddleworks/capture/web`                    | `serve`: the read-only page on 127.0.0.1                            |
 | `@puddleworks/capture-log-request` (workflow) | Logs a request from a program, once per `sourceRef`                 |
+| `@puddleworks/capture-review-spec` (workflow) | Has an agent review the spec up for agreement                       |
 
 Set it up in a swamp repository:
 
@@ -90,6 +91,53 @@ swamp workflow run @puddleworks/capture-log-request --input title="…" \
 ```
 
 It replaces `@puddleworks/capture-client`, which called the Node app's API.
+
+### Have an agent review the spec
+
+Once a specification is proposed it is frozen for agreement. An agent that never
+saw the discussion makes a good second reader: it reads only the frozen spec and
+says what is missing, vague or can't be checked. The
+`@puddleworks/capture-review-spec` workflow runs one and puts what it found on
+the request. It is optional, and Capture doesn't depend on any agent: the
+repository brings its own agent behavior. `@mgreten/cli-agent` runs Claude Code,
+Codex, OpenCode, Gemini CLI, Amp, Grok or pi, so each repository picks its
+provider. The provider's CLI must be installed and signed in on the machine.
+
+Set it up once:
+
+```bash
+swamp extension pull @mgreten/cli-agent
+swamp behavior create @mgreten/cli-agent spec-reviewer \
+  --global-arg defaultProvider=claude --global-arg defaultModel=sonnet
+swamp behavior run capture add_person --input email=reviewer@example.com \
+  --input name="Spec reviewer"
+```
+
+Then, for each request, invite the reviewer (the outcome owner or a builder can)
+and run the workflow after the spec is proposed:
+
+```bash
+swamp behavior run capture invite --input id=12 \
+  --input email=reviewer@example.com --input role=reviewer
+swamp workflow run @puddleworks/capture-review-spec --input id=12 \
+  --input reviewer=spec-reviewer --input reviewerAs=reviewer@example.com
+```
+
+The workflow writes the review prompt (`review_prompt`, as `review-prompt-<id>`
+data), has the agent answer it with a verdict and findings in JSON, and records
+them (`record_review`). Each finding becomes a question on the request, and the
+verdict a decision:
+
+| Verdict                        | What happens                                                                      |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| `ready` or `minor_revision`    | Stays up for agreement; agreeing waits until the findings' questions are resolved |
+| `major_revision` or `not_safe` | Sent back for changes, so the spec can be rewritten and proposed again            |
+
+Both methods refuse unless the request is ready for agreement and `as` is a
+reviewer on it, and a review of a version that is no longer up for agreement is
+refused. The review criteria follow the work-item lens of
+[`@atalanta/sdlc-review-lenses`](https://github.com/Atalanta/swamp-sdlc-review-lenses)
+(MIT), rewritten for outcome-spec fields.
 
 ### Develop
 

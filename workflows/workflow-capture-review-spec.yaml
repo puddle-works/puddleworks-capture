@@ -1,0 +1,69 @@
+id: 7674bbfc-8aee-496a-a439-d1598ad9f7bc
+name: "@puddleworks/capture-review-spec"
+description: >-
+  Have an agent review the specification up for agreement. It reads only the
+  frozen spec, never the discussion, and its findings become questions on the
+  request, so agreement waits for them. Needs a @puddleworks/capture/requests
+  behavior named capture, and an agent behavior with an invokeAndParse method,
+  such as @mgreten/cli-agent, named by the reviewer input.
+version: 1
+tags:
+  maxWallClock: "1h"
+inputs:
+  type: object
+  properties:
+    id:
+      type: string
+      description: The request's number, such as 12 or #12, or its id.
+    reviewer:
+      type: string
+      description: >-
+        The agent behavior that reviews, such as a @mgreten/cli-agent behavior.
+        Its provider and model are its own settings.
+    reviewerAs:
+      type: string
+      description: >-
+        The reviewer's email in the people list. They must be invited onto the
+        request with the reviewer role.
+  required: [id, reviewer, reviewerAs]
+jobs:
+  - name: main
+    steps:
+      - name: read_spec
+        description: Write the review prompt for the frozen spec
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: review_prompt
+          inputs:
+            as: ${{ inputs.reviewerAs }}
+            id: ${{ inputs.id }}
+      - name: review
+        description: The agent reviews the spec and answers in JSON
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.reviewer }}
+          methodName: invokeAndParse
+          inputs:
+            prompt: ${{ steps.read_spec.outputs.prompt }}
+            tags:
+              capture-request: ${{ steps.read_spec.outputs.requestId }}
+        dependsOn:
+          - step: read_spec
+            condition:
+              type: succeeded
+      - name: record_review
+        description: Post the findings and the verdict on the request
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: record_review
+          inputs:
+            as: ${{ inputs.reviewerAs }}
+            id: ${{ steps.read_spec.outputs.requestId }}
+            version: ${{ steps.read_spec.outputs.version }}
+            review: ${{ steps.review.outputs.parsedResponse }}
+        dependsOn:
+          - step: review
+            condition:
+              type: succeeded

@@ -19,4 +19,5 @@ export {
   submit,
   withdraw,
 } from "./request.ts";
+export * from "./review.ts";
 export * from "./specification.ts";

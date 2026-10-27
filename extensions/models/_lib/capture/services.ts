@@ -22,12 +22,16 @@ import {
   postMessage,
   propose,
   recordExport,
+  recordReview,
   removeParticipant,
   type Request,
   requestChanges,
   type RequestDetails,
   type RequestStatus,
   resolveQuestion,
+  type Review,
+  reviewPrompt,
+  reviewVersion,
   revise,
   type Role,
   roleOf,
@@ -384,6 +388,30 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         }
         return editSpecification(r, p, content, basedOnMessageIds, at);
       }),
+
+    /** The prompt for a reviewer of the spec up for agreement, and its version. */
+    async reviewPrompt(
+      as: string,
+      id: string,
+    ): Promise<{ stored: Stored; version: number; prompt: string }> {
+      const person = await actor(as);
+      const stored = await load(person, id);
+      const version = reviewVersion(stored.request, person);
+      return { stored, version, prompt: reviewPrompt(stored.request) };
+    },
+
+    /** `version`, when given, is the one reviewed; a newer one refuses it. */
+    recordReview: (
+      as: string,
+      id: string,
+      review: Review,
+      version?: number,
+    ) =>
+      mutate(
+        as,
+        id,
+        (r, p, at) => recordReview(r, p, review, { newId, version }, at),
+      ),
 
     agree: (as: string, id: string, version: number) =>
       mutate(as, id, async (r, p, at) => {

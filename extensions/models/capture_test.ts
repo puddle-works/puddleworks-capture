@@ -314,6 +314,78 @@ describe("@puddleworks/capture/requests", () => {
     expect(swamp.data(`request-${id}`)).toMatchObject({ status: "discussing" });
   });
 
+  it("gives a reviewer the frozen spec to review, and records what they found", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    await run("add_person", { email: "rae@example.com", name: "Rae Reviewer" });
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    const rae = { as: "rae@example.com", id: "#1" };
+    await run("submit", { id });
+    await run("join_request", { as: "bea@example.com", id });
+    await run("edit_specification", {
+      as: "bea@example.com",
+      id,
+      specification: JSON.stringify(goodSpec),
+    });
+    await run("invite", { id, email: "rae@example.com", role: "reviewer" });
+    // Nothing to review until the spec is frozen for agreement.
+    await expect.rejects(
+      run("review_prompt", rae),
+      expect.objectContaining({
+        message: expect.stringContaining("ready for agreement"),
+      }),
+    );
+    await run("propose", { as: "bea@example.com", id });
+    const prompted = await run("review_prompt", rae);
+    // Written under the request's id, for the workflow's next steps.
+    expect(prompted.dataHandles.map((h) => h.name)).toEqual([
+      `review-prompt-${id}`,
+    ]);
+    const prompt = swamp.data(`review-prompt-${id}`)!;
+    expect(prompt).toMatchObject({ requestId: id, number: 1, version: 1 });
+    expect(String(prompt.prompt)).toMatch(/AC1: A count can be entered/);
+
+    // The agent's answer arrives as JSON text or as an object.
+    await run("record_review", {
+      ...rae,
+      version: "1",
+      review: JSON.stringify({
+        verdict: "minor_revision",
+        summary: "One gap.",
+        findings: [{ id: "F1", text: "Who enters the count?" }],
+      }),
+    });
+    expect(swamp.logs.at(-1)).toBe(
+      `Recorded a review of request #1 (${id}): now ready_for_agreement, version 7`,
+    );
+    const after = swamp.data(`request-${id}`)! as {
+      messages: { kind: string; body: string }[];
+    };
+    expect(after.messages.map((m) => [m.kind, m.body])).toEqual([
+      ["question", "F1: Who enters the count?"],
+      ["decision", "Review of version 1: minor revision. One gap."],
+    ]);
+    await expect.rejects(
+      run("record_review", {
+        as: "bea@example.com",
+        id,
+        review: { verdict: "ready", findings: [] },
+      }),
+      expect.objectContaining({
+        message: expect.stringContaining("Only a reviewer"),
+      }),
+    );
+    await run("record_review", {
+      ...rae,
+      review: { verdict: "not_safe", findings: [] },
+    });
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "discussing" });
+  });
+
   it("discusses, invites and removes", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);
