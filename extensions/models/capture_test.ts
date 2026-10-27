@@ -46,6 +46,12 @@ describe("@puddleworks/capture/requests", () => {
     expect(last.upgradeAttributes(old)).toEqual(old);
   });
 
+  it("links exported specs to the viewer's port when appUrl is left out", () => {
+    expect(model.globalArguments.parse({}).appUrl).toBe(
+      "http://127.0.0.1:3002",
+    );
+  });
+
   it("is at the version the manifest publishes", async () => {
     const manifest = await Deno.readTextFile(
       new URL("../../manifest.yaml", import.meta.url),

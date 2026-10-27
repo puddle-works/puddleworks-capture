@@ -35,7 +35,7 @@ import { toRequestView, toSummary } from "./_lib/capture/views.ts";
 
 /** The behavior's settings: where request pages are served, and who acts by default. */
 export const GlobalArgsSchema = z.object({
-  appUrl: z.url().default("http://127.0.0.1:3001").describe(
+  appUrl: z.url().default("http://127.0.0.1:3002").describe(
     "Where the request pages are served, with no trailing slash. Exported outcome specs link to <appUrl>/requests/<id>.",
   ),
   defaultAs: z.email().optional().describe(
@@ -162,7 +162,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.27.3",
+  version: "2026.10.27.4",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -174,6 +174,12 @@ export const model = {
     {
       toVersion: "2026.10.27.3",
       description: "Every change is logged; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.27.4",
+      description:
+        "appUrl defaults to the viewer's port 3002; set values are kept",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

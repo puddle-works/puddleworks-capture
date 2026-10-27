@@ -18,7 +18,7 @@ async function setup() {
     store,
     clock: () => "2026-10-22T09:00:00.000Z",
     newId: () => `id-${++n}`,
-    appUrl: "http://127.0.0.1:3001",
+    appUrl: "http://127.0.0.1:3002",
   });
   await services.addPerson({
     email: OLIVE,
@@ -175,7 +175,7 @@ describe("requests", () => {
     expect(exported.request.status).toBe("exported");
     expect(document).toMatchObject({
       format: "puddleworks.dev/outcome-spec/v1",
-      request: { id, url: `http://127.0.0.1:3001/requests/${id}` },
+      request: { id, url: `http://127.0.0.1:3002/requests/${id}` },
     });
     const markdown = await services.export(BEA, id, "markdown");
     expect(typeof markdown.document).toBe("string");
@@ -316,7 +316,7 @@ describe("numbers", () => {
       "outcome-spec/v1+json",
     );
     expect(document).toMatchObject({
-      request: { id, url: `http://127.0.0.1:3001/requests/${id}` },
+      request: { id, url: `http://127.0.0.1:3002/requests/${id}` },
     });
   });
 
