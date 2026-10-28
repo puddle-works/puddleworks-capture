@@ -4,7 +4,12 @@ import {
   expect,
   it,
 } from "../../extensions/models/_lib/domain/test_bdd.ts";
-import { agreedRequest } from "../../extensions/models/_lib/domain/test_fixtures.ts";
+import {
+  agreedRequest,
+  owner,
+  T2,
+} from "../../extensions/models/_lib/domain/test_fixtures.ts";
+import { recordExport } from "../../extensions/models/_lib/domain/index.ts";
 import { toWebRequest } from "../../extensions/models/_lib/capture/views.ts";
 import {
   badgeClass,
@@ -83,6 +88,56 @@ describe("historyEntries", () => {
       number: 1,
     });
     expect(historyEntries(view)[1].label).toBe("Imported");
+  });
+
+  it("shows each export at its time, as exports no longer change the status", () => {
+    const request = recordExport(agreedRequest(), owner, "markdown", T2);
+    const view = toWebRequest({
+      request,
+      version: 5,
+      idempotencyKeys: [],
+      before: null,
+      legacy: null,
+      number: 1,
+    });
+    const entries = historyEntries(view);
+    expect(entries).toHaveLength(view.transitions.length + 2);
+    expect(entries[entries.length - 1]).toEqual({
+      label: "Exported as Markdown (version 1)",
+      by: "Olive Owner",
+      at: T2,
+      note: null,
+    });
+  });
+
+  it("shows an older export, saved as a transition, once", () => {
+    const request = agreedRequest();
+    request.exports = [{
+      specVersion: 1,
+      format: "markdown",
+      exportedBy: request.outcomeOwnerId,
+      exportedAt: T2,
+    }];
+    request.transitions = [...request.transitions, {
+      from: "agreed",
+      to: "agreed",
+      action: "export",
+      by: request.outcomeOwnerId,
+      at: T2,
+      note: null,
+    }];
+    const view = toWebRequest({
+      request,
+      version: 5,
+      idempotencyKeys: [],
+      before: null,
+      legacy: null,
+      number: 1,
+    });
+    const labels = historyEntries(view).map((e) => e.label);
+    expect(labels.filter((l) => l.startsWith("Exported"))).toEqual([
+      "Exported as Markdown (version 1)",
+    ]);
   });
 });
 

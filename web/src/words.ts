@@ -16,7 +16,6 @@ export const STATUS: Record<RequestStatus, string> = {
   discussing: "Being discussed",
   ready_for_agreement: "Ready for agreement",
   agreed: "Agreed",
-  exported: "Exported",
   withdrawn: "Withdrawn",
   declined: "Declined",
 };
@@ -27,7 +26,6 @@ export const STATUS_GROUPS: [RequestStatus, string][] = [
   ["discussing", "Being discussed"],
   ["ready_for_agreement", "Ready for agreement"],
   ["agreed", "Agreed"],
-  ["exported", "Exported"],
   ["withdrawn", "Withdrawn"],
   ["declined", "Declined"],
 ];
@@ -53,7 +51,6 @@ const BADGE: Record<RequestStatus, string> = {
   discussing: "active",
   ready_for_agreement: "review",
   agreed: "delivered",
-  exported: "delivered",
   withdrawn: "closed",
   declined: "closed",
 };
@@ -159,25 +156,37 @@ export function historyEntries(request: WebRequest): HistoryEntry[] {
     at: request.createdAt,
     note: null,
   };
+  const exportedAs = (e: WebRequest["exports"][number]) =>
+    `Exported as ${FORMAT[e.format]} (version ${e.specVersion})`;
+  const changes = request.transitions.map((t) => {
+    let label = ACTION[t.action] ?? t.action;
+    if (t.action === "agree") {
+      const agreement = request.agreements.find((a) => a.agreedAt === t.at);
+      label = agreement
+        ? `Agreed to version ${agreement.specVersion}`
+        : "Agreed";
+    }
+    if (t.action === "export") {
+      const exported = request.exports.find((e) => e.exportedAt === t.at);
+      label = exported ? exportedAs(exported) : "Exported";
+    }
+    return { label, by: t.byName, at: t.at, note: t.note };
+  });
+  // An export once moved the status, so older ones are transitions too.
+  const exports = request.exports
+    .filter((e) =>
+      !request.transitions.some((t) =>
+        t.action === "export" && t.at === e.exportedAt
+      )
+    )
+    .map((e) => ({
+      label: exportedAs(e),
+      by: e.exportedByName,
+      at: e.exportedAt,
+      note: null,
+    }));
   return [
     raised,
-    ...request.transitions.map((t) => {
-      let label = ACTION[t.action] ?? t.action;
-      if (t.action === "agree") {
-        const agreement = request.agreements.find((a) => a.agreedAt === t.at);
-        label = agreement
-          ? `Agreed to version ${agreement.specVersion}`
-          : "Agreed";
-      }
-      if (t.action === "export") {
-        const exported = request.exports.find((e) => e.exportedAt === t.at);
-        label = exported
-          ? `Exported as ${
-            FORMAT[exported.format]
-          } (version ${exported.specVersion})`
-          : "Exported";
-      }
-      return { label, by: t.byName, at: t.at, note: t.note };
-    }),
+    ...[...changes, ...exports].sort((a, b) => a.at.localeCompare(b.at)),
   ];
 }

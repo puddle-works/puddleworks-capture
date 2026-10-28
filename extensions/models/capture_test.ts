@@ -213,7 +213,7 @@ describe("@puddleworks/capture/requests", () => {
     );
   });
 
-  it("takes a request from draft to an exported outcome spec", async () => {
+  it("takes a request from draft to agreed, writing the outcome spec as it agrees", async () => {
     const { swamp, run } = setup({ appUrl: "http://capture.local:3001" });
     await people(run);
     const created = await run("create_request", {
@@ -231,19 +231,26 @@ describe("@puddleworks/capture/requests", () => {
       specification: JSON.stringify(goodSpec),
     });
     await run("propose", bea);
-    await run("agree", { ...olive, version: "1" });
-    const exported = await run("export_outcome_spec", bea);
+    const agreed = await run("agree", { ...olive, version: "1" });
+    expect(agreed.dataHandles.map((h) => h.name)).toEqual([
+      `request-${id}`,
+      `outcome-spec-${id}`,
+    ]);
+    const request = swamp.data(`request-${id}`)!;
+    expect(request).toMatchObject({ status: "agreed", version: 6 });
     const doc = swamp.data(`outcome-spec-${id}`)!;
+    expect(doc).toMatchObject({
+      format: "puddleworks.dev/outcome-spec/v1",
+      request: { url: `http://capture.local:3001/requests/${id}` },
+      exportedAt: (request.agreements as { agreedAt: string }[])[0].agreedAt,
+    });
+    const exported = await run("export_outcome_spec", bea);
     expect(exported.dataHandles.map((h) => h.name)).toEqual([
       `request-${id}`,
       `outcome-spec-${id}`,
     ]);
-    expect(doc).toMatchObject({
-      format: "puddleworks.dev/outcome-spec/v1",
-      request: { url: `http://capture.local:3001/requests/${id}` },
-    });
     expect(swamp.data(`request-${id}`)).toMatchObject({
-      status: "exported",
+      status: "agreed",
       version: 7,
     });
     const md = await run("export_outcome_spec", { ...bea, format: "markdown" });
@@ -289,6 +296,20 @@ describe("@puddleworks/capture/requests", () => {
     expect(swamp.data(`outcome-spec-md-${id}`)).toMatchObject({
       requestId: id,
     });
+  });
+
+  it("reads a request an older Capture saved as exported as agreed", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    swamp.latest().find((r) => r.name === `request-${id}`)!.attributes
+      .status = "exported";
+    await run("get_request", { id });
+    expect(swamp.data(`view-${id}`)).toMatchObject({ status: "agreed" });
   });
 
   it("reads one request and lists them as the person asking sees them", async () => {

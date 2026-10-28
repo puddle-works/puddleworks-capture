@@ -5,7 +5,6 @@ export const REQUEST_STATUSES = [
   "discussing",
   "ready_for_agreement",
   "agreed",
-  "exported",
   "withdrawn",
   "declined",
 ] as const;

@@ -12,7 +12,6 @@ export const ACTIONS = [
   "propose",
   "requestChanges",
   "agree",
-  "export",
   "revise",
   "withdraw",
   "decline",
@@ -27,10 +26,9 @@ export const TRANSITIONS: Record<
   propose: { from: ["discussing"], to: "ready_for_agreement" },
   requestChanges: { from: ["ready_for_agreement"], to: "discussing" },
   agree: { from: ["ready_for_agreement"], to: "agreed" },
-  export: { from: ["agreed", "exported"], to: "exported" },
-  revise: { from: ["agreed", "exported"], to: "discussing" },
+  revise: { from: ["agreed"], to: "discussing" },
   withdraw: {
-    from: ["draft", "discussing", "ready_for_agreement", "agreed", "exported"],
+    from: ["draft", "discussing", "ready_for_agreement", "agreed"],
     to: "withdrawn",
   },
   decline: { from: ["discussing", "ready_for_agreement"], to: "declined" },
@@ -41,7 +39,6 @@ const PERMISSION_FOR: Record<Action, Permission | null> = {
   propose: "propose",
   requestChanges: "requestChanges",
   agree: "agree",
-  export: "export",
   revise: "revise",
   withdraw: "withdraw",
   decline: "decline",
@@ -52,11 +49,36 @@ const ACTION_WORDS: Record<Action, string> = {
   propose: "propose the specification of",
   requestChanges: "ask for changes to",
   agree: "agree to",
-  export: "export",
   revise: "revise",
   withdraw: "withdraw",
   decline: "decline",
 };
+
+/**
+ * A request as an older Capture saved it, brought up to date. Exporting once
+ * moved an agreed request to `exported`; agreeing is now the hand-off, so
+ * `exported` reads as `agreed`, in the status and in the history. Its exports
+ * stay as they were.
+ */
+export function upgradeRequest(request: Request): Request {
+  const was = (s: string) => (s === "exported" ? "agreed" : s) as RequestStatus;
+  const old = (s: string) => s === "exported";
+  if (
+    !old(request.status) &&
+    !request.transitions.some((t) => old(t.from) || old(t.to))
+  ) {
+    return request;
+  }
+  return {
+    ...request,
+    status: was(request.status),
+    transitions: request.transitions.map((t) => ({
+      ...t,
+      from: was(t.from),
+      to: was(t.to),
+    })),
+  };
+}
 
 export function statusWords(status: RequestStatus): string {
   return status.replaceAll("_", " ");

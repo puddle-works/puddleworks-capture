@@ -2,7 +2,7 @@
 // (`request-<id>`) and one `person` resource per person (`person-<id>`), each
 // saved change a new version. It remembers what it wrote, so a method reads
 // its own writes, and hands swamp the data handles to return.
-import type { Person, Request } from "../domain/index.ts";
+import { type Person, type Request, upgradeRequest } from "../domain/index.ts";
 import type { CaptureStore, Stored } from "./ports.ts";
 
 export const REQUEST_SPEC = "request";
@@ -62,7 +62,8 @@ export function toResource(stored: Stored): Record<string, unknown> {
 export function fromResource(data: Record<string, unknown>): Stored {
   const { version, idempotencyKeys, before, legacy, number, ...request } = data;
   return {
-    request: request as unknown as Request,
+    // An older Capture may have saved it as exported.
+    request: upgradeRequest(request as unknown as Request),
     version: Number(version ?? 1),
     idempotencyKeys: (idempotencyKeys ?? []) as Stored["idempotencyKeys"],
     before: (before ?? null) as Stored["before"],

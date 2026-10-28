@@ -103,8 +103,8 @@ describe("allowed actions", () => {
         builder,
       ),
     ).toEqual([
-      "export",
       "revise",
+      "export",
       "message",
       "invite",
     ]);
