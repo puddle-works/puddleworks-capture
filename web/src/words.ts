@@ -31,6 +31,22 @@ export const STATUS_GROUPS: [RequestStatus, string][] = [
   ["declined", "Declined"],
 ];
 
+/** How many requests each stage of the list shows before "Show all". */
+export const RECENT_PER_STAGE = 5;
+
+/** A stage's most recently updated requests, newest first, and the rest. */
+export function splitRecent<T extends { updatedAt: string }>(
+  group: T[],
+): { recent: T[]; rest: T[] } {
+  const newest = [...group].sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  );
+  return {
+    recent: newest.slice(0, RECENT_PER_STAGE),
+    rest: newest.slice(RECENT_PER_STAGE),
+  };
+}
+
 const BADGE: Record<RequestStatus, string> = {
   draft: "draft",
   discussing: "active",

@@ -1,4 +1,5 @@
-// Every request, grouped by where it is, and the people list.
+// Every request, grouped by where it is, and the people list. Each stage shows
+// its most recent requests; the rest roll down beneath them on "Show all".
 import { useEffect, useState } from "preact/hooks";
 import type {
   WebOverview,
@@ -11,6 +12,7 @@ import {
   formatTime,
   numbered,
   plural,
+  splitRecent,
   STATUS,
   STATUS_GROUPS,
 } from "./words.ts";
@@ -46,12 +48,13 @@ export function RequestList({ changes }: { changes: number }) {
         : STATUS_GROUPS.map(([status, heading]) => {
           const group = data.requests.filter((r) => r.status === status);
           if (group.length === 0) return null;
-          const id = `group-${status}`;
           return (
-            <section key={status} aria-labelledby={id}>
-              <h2 id={id}>{heading}</h2>
-              {group.map((r) => <Card key={r.id} request={r} />)}
-            </section>
+            <Stage
+              key={status}
+              id={`group-${status}`}
+              heading={heading}
+              group={group}
+            />
           );
         })}
       <section aria-labelledby="people-heading">
@@ -74,6 +77,38 @@ export function RequestList({ changes }: { changes: number }) {
       </section>
       <p class="card-meta read-at">Read {formatTime(data.readAt)}</p>
     </>
+  );
+}
+
+function Stage(
+  { id, heading, group }: { id: string; heading: string; group: WebSummary[] },
+) {
+  const [open, setOpen] = useState(false);
+  const { recent, rest } = splitRecent(group);
+  const restId = `${id}-rest`;
+  return (
+    <section aria-labelledby={id}>
+      <h2 id={id}>{heading}</h2>
+      {recent.map((r) => <Card key={r.id} request={r} />)}
+      {rest.length > 0 && (
+        <>
+          <div id={restId} class={open ? "concertina open" : "concertina"}>
+            <div class="concertina-inner" inert={!open}>
+              {rest.map((r) => <Card key={r.id} request={r} />)}
+            </div>
+          </div>
+          <button
+            type="button"
+            class="link-button show-all"
+            aria-expanded={open}
+            aria-controls={restId}
+            onClick={() => setOpen(!open)}
+          >
+            {open ? "Show fewer" : `Show all ${group.length}`}
+          </button>
+        </>
+      )}
+    </section>
   );
 }
 

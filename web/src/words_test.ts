@@ -11,7 +11,9 @@ import {
   historyEntries,
   numbered,
   plural,
+  RECENT_PER_STAGE,
   routeOf,
+  splitRecent,
 } from "./words.ts";
 
 describe("routeOf", () => {
@@ -88,5 +90,32 @@ describe("words", () => {
     expect(badgeClass("ready_for_agreement")).toBe("badge badge-review");
     expect(plural(1, "open question")).toBe("1 open question");
     expect(plural(2, "open question")).toBe("2 open questions");
+  });
+});
+
+describe("splitRecent", () => {
+  const at = (day: number) => ({
+    id: `r-${day}`,
+    updatedAt: `2026-10-${String(day).padStart(2, "0")}T09:00:00.000Z`,
+  });
+
+  it("shows the five most recently updated and keeps the rest for show all", () => {
+    expect(RECENT_PER_STAGE).toBe(5);
+    const group = [3, 9, 1, 7, 5, 8, 2].map(at);
+    const { recent, rest } = splitRecent(group);
+    expect(recent.map((r) => r.id)).toEqual([
+      "r-9",
+      "r-8",
+      "r-7",
+      "r-5",
+      "r-3",
+    ]);
+    expect(rest.map((r) => r.id)).toEqual(["r-2", "r-1"]);
+  });
+
+  it("keeps nothing back when a stage has five or fewer", () => {
+    const { recent, rest } = splitRecent([1, 2, 3, 4, 5].map(at));
+    expect(recent.length).toBe(5);
+    expect(rest).toEqual([]);
   });
 });

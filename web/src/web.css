@@ -188,6 +188,28 @@ main ul li {
   color: var(--color-accent);
   text-decoration: none;
 }
+/* A stage's older requests, rolled up until "Show all" rolls them down. */
+.concertina {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms ease;
+}
+.concertina.open {
+  grid-template-rows: 1fr;
+}
+.concertina-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .concertina {
+    transition: none;
+  }
+}
+.show-all {
+  margin-top: 4px;
+}
+
 .card-meta {
   font-size: 12px;
   color: var(--color-text-secondary);
