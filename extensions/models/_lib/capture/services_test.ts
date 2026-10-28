@@ -414,6 +414,31 @@ describe("import", () => {
     expect((await services.get(OLIVE, "r-b")).number).toBe(3);
   });
 
+  it("keeps a snapshot's numbers, and gives the next free one where a number is taken", async () => {
+    const { store, services } = await setup();
+    const { stored } = await services.create(OLIVE, draft);
+    const numbered = (id: string, number: number, at: string) => ({
+      request: { ...stored.request, id, createdAt: `${at}T09:00:00.000Z` },
+      version: 1,
+      idempotencyKeys: [],
+      before: null,
+      legacy: null,
+      number,
+    });
+    const counts = await services.importSnapshot({
+      ...snapshot,
+      requests: [
+        numbered("r-one", 1, "2026-10-01"),
+        numbered("r-five", 5, "2026-10-02"),
+        numbered("r-five-too", 5, "2026-10-03"),
+      ],
+    });
+    expect(counts.requestsNumbered).toBe(2);
+    expect(store.requests.get("r-five")!.number).toBe(5);
+    expect(store.requests.get("r-one")!.number).toBe(6);
+    expect(store.requests.get("r-five-too")!.number).toBe(7);
+  });
+
   it("refuses a file that isn't a Capture snapshot", async () => {
     const { services } = await setup();
     await expect.rejects(
@@ -422,5 +447,59 @@ describe("import", () => {
       ),
       expect.objectContaining({ code: "invalid_input" }),
     );
+  });
+});
+
+describe("export", () => {
+  function empty() {
+    const store = new MemoryStore();
+    let n = 0;
+    const services = createServices({
+      store,
+      clock: () => "2026-10-28T09:00:00.000Z",
+      newId: () => `new-${++n}`,
+      appUrl: "http://127.0.0.1:3002",
+    });
+    return { store, services };
+  }
+  const byKey = <T>(map: Map<string, T>) => Object.fromEntries(map);
+
+  it("holds everything, so an import into an empty store gives the same record", async () => {
+    const from = await setup();
+    const { stored } = await from.services.create(OLIVE, draft, "turn-1");
+    await from.services.submit(OLIVE, stored.request.id);
+    await from.services.create(BEA, { ...draft, title: "Rota" });
+    const snapshot = await from.services.exportSnapshot();
+    expect(snapshot).toMatchObject({
+      format: "capture-snapshot/v1",
+      exportedAt: "2026-10-22T09:00:00.000Z",
+    });
+    // It goes through a file, so only what survives JSON counts.
+    const file = JSON.parse(JSON.stringify(snapshot)) as Snapshot;
+    const to = empty();
+    expect(await to.services.importSnapshot(file)).toEqual({
+      peopleAdded: 3,
+      peopleSkipped: 0,
+      requestsAdded: 2,
+      requestsSkipped: 0,
+      requestsNumbered: 0,
+    });
+    expect(byKey(to.store.people)).toEqual(byKey(from.store.people));
+    expect(byKey(to.store.requests)).toEqual(byKey(from.store.requests));
+    expect(await to.services.importSnapshot(file)).toMatchObject({
+      peopleAdded: 0,
+      requestsAdded: 0,
+    });
+  });
+
+  it("gives back the same request for a key logged before the move", async () => {
+    const from = await setup();
+    const { stored } = await from.services.create(OLIVE, draft, "turn-1");
+    const to = empty();
+    await to.services.importSnapshot(await from.services.exportSnapshot());
+    const again = await to.services.create(OLIVE, draft, "turn-1");
+    expect(again.created).toBe(false);
+    expect(again.stored.request.id).toBe(stored.request.id);
+    expect(again.stored.number).toBe(1);
   });
 });

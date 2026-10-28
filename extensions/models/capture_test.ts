@@ -415,6 +415,42 @@ describe("@puddleworks/capture/requests", () => {
     expect(after.messages[0].resolvedAt === null).toBe(false);
   });
 
+  it("exports a snapshot file, and won't write over one", async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const swamp = new FakeSwamp();
+      const context = swamp.context(model.globalArguments.parse({}), dir);
+      const add = model.methods.add_person;
+      await add.execute(
+        add.arguments.parse({ email: "olive@example.com", name: "Olive" }),
+        context,
+      );
+      const m = model.methods.export_snapshot;
+      await m.execute(m.arguments.parse({ path: "snapshot.json" }), context);
+      const file = `${dir}/snapshot.json`;
+      expect(JSON.parse(await Deno.readTextFile(file))).toMatchObject({
+        format: "capture-snapshot/v1",
+        people: [{ email: "olive@example.com" }],
+        requests: [],
+      });
+      // It holds people's emails, so only its owner can read it.
+      expect((await Deno.stat(file)).mode! & 0o777).toBe(0o600);
+      expect(swamp.data("export-latest")).toMatchObject({
+        path: "snapshot.json",
+        people: 1,
+        requests: 0,
+      });
+      await expect.rejects(
+        m.execute(m.arguments.parse({ path: "snapshot.json" }), context),
+        expect.objectContaining({
+          message: expect.stringContaining("already"),
+        }),
+      );
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  });
+
   it("imports a snapshot file from the repo once", async () => {
     const dir = await Deno.makeTempDir();
     try {

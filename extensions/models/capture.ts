@@ -17,6 +17,7 @@
  * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
  * - `outcomeSpec`: an exported outcome-spec/v1 document (`outcome-spec-<id>`).
  * - `outcomeSpecMarkdown`: the same, as Markdown (`outcome-spec-md-<id>`).
+ * - `exportResult`: what the last snapshot export wrote (`export-latest`).
  * - `importResult`: what the last import brought in (`import-latest`).
  *
  * @module
@@ -163,7 +164,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.28.1",
+  version: "2026.10.28.2",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -197,6 +198,11 @@ export const model = {
     {
       toVersion: "2026.10.28.1",
       description: "No settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.28.2",
+      description: "Snapshot export; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -290,6 +296,17 @@ export const model = {
         requestId: z.string(),
         format: z.literal("markdown"),
         markdown: z.string(),
+        exportedAt: z.string(),
+      }),
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    exportResult: {
+      description: "Where the last snapshot export wrote, and how much.",
+      schema: z.object({
+        path: z.string(),
+        people: z.number().int(),
+        requests: z.number().int(),
         exportedAt: z.string(),
       }),
       lifetime: "infinite" as const,
@@ -741,9 +758,56 @@ export const model = {
         }),
     },
 
+    export_snapshot: {
+      description:
+        "Write everything Capture holds, people and every request whatever its sharing, to a new capture-snapshot/v1 file, so another repository can import it. The file holds people's emails.",
+      arguments: z.object({
+        path: z.string().min(1).describe(
+          "Where to write the snapshot, relative to the repository. There must be no file there yet.",
+        ),
+      }),
+      execute: (args: { path: string }, context: CaptureContext) =>
+        run(context, async (services, store) => {
+          const file = args.path.startsWith("/")
+            ? args.path
+            : `${context.repoDir}/${args.path}`;
+          const snapshot = await services.exportSnapshot();
+          try {
+            await Deno.writeTextFile(
+              file,
+              `${JSON.stringify(snapshot, null, 2)}\n`,
+              { createNew: true, mode: 0o600 },
+            );
+          } catch (e) {
+            if (e instanceof Deno.errors.AlreadyExists) {
+              throw new Error(
+                `${args.path} already exists. Name a new file, so no earlier snapshot is lost.`,
+              );
+            }
+            throw e;
+          }
+          store.add(
+            await context.writeResource("exportResult", "export-latest", {
+              path: args.path,
+              people: snapshot.people.length,
+              requests: snapshot.requests.length,
+              exportedAt: snapshot.exportedAt,
+            }),
+          );
+          context.logger.info(
+            "Exported {people} people and {requests} requests to {path}",
+            {
+              people: snapshot.people.length,
+              requests: snapshot.requests.length,
+              path: args.path,
+            },
+          );
+        }),
+    },
+
     import: {
       description:
-        "Bring in a capture-snapshot/v1 file, as Capture's old Node app exported. Adds only what isn't here yet, so it is safe to run again.",
+        "Bring in a capture-snapshot/v1 file, as export_snapshot or Capture's old Node app wrote. Adds only what isn't here yet, so it is safe to run again.",
       arguments: z.object({
         path: z.string().min(1).describe(
           "The snapshot file, relative to the repository.",

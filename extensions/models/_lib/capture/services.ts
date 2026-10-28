@@ -446,8 +446,25 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     },
 
     /**
-     * Adds what isn't here yet: a person by email or id, a request by id.
-     * Then numbers what has no number. Safe to run again.
+     * Everything Capture holds, for moving it to another repository. It is
+     * not a read as one person, so sharing doesn't limit it.
+     */
+    async exportSnapshot(): Promise<Snapshot> {
+      const requests = await store.allRequests();
+      return {
+        format: "capture-snapshot/v1",
+        exportedAt: clock(),
+        people: await store.allPeople(),
+        requests: requests.sort((a, b) =>
+          (a.number ?? Infinity) - (b.number ?? Infinity)
+        ),
+      };
+    },
+
+    /**
+     * Adds what isn't here yet: a person by email or id, a request by id,
+     * keeping its number unless one here has it. Then numbers what has no
+     * number. Safe to run again.
      */
     async importSnapshot(snapshot: Snapshot): Promise<ImportCounts> {
       const parsed = SnapshotSchema.safeParse(snapshot);
@@ -478,6 +495,9 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         people.push(person);
         counts.peopleAdded++;
       }
+      const taken = new Set(
+        (await store.allRequests()).map((s) => s.number),
+      );
       const adding: Stored[] = [];
       for (const incoming of parsed.data.requests) {
         if (
@@ -487,12 +507,18 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
           counts.requestsSkipped++;
           continue;
         }
+        // A number already in use here is given out again after the rest.
+        const number = taken.has(incoming.number) ? null : incoming.number;
+        taken.add(number);
         adding.push({
           ...incoming,
           request: incoming.request as unknown as Request,
-          number: null,
+          number,
         });
         counts.requestsAdded++;
+      }
+      for (const stored of adding) {
+        if (stored.number !== null) await store.saveRequest(stored);
       }
       counts.requestsNumbered = (await numberRequests(adding)).numbered;
       return counts;
