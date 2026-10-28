@@ -22,6 +22,19 @@ inputs:
       type: string
       description: How it is done today, if at all.
       default: ""
+    phrase:
+      type: string
+      description: >-
+        The turn a router couldn't answer. It becomes the requested phrase,
+        the first example of the draft spec's recipe. Blank for none.
+      default: ""
+    candidateExtensions:
+      type: array
+      items:
+        type: string
+      description: >-
+        Extensions a router's search found that may do most of the work.
+      default: []
     sourceRef:
       type: string
       description: >-
@@ -40,4 +53,6 @@ jobs:
             title: ${{ inputs.title }}
             description: ${{ inputs.description }}
             currentProcess: ${{ inputs.currentProcess }}
+            phrase: ${{ inputs.phrase }}
+            candidateExtensions: ${{ inputs.candidateExtensions }}
             idempotencyKey: ${{ inputs.sourceRef }}

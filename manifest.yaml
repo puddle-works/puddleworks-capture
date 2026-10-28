@@ -1,11 +1,12 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.10.28.2"
+version: "2026.10.28.3"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
   specification, reviewed, agreed, and exported as outcome-spec/v1 JSON or
-  Markdown. Everything is kept in swamp data.
+  Markdown. Every specification has a recipe: the phrases it must answer and
+  what each answer shows. Everything is kept in swamp data.
 
   ## Models
 
@@ -22,7 +23,9 @@ description: |
   ## Workflows
 
   - `@puddleworks/capture-log-request`: log a request as a draft from
-    another tool, such as puddlerouter, keyed on where it came from.
+    another tool, such as puddlerouter, keyed on where it came from. A phrase
+    it was asked as starts the draft spec's recipe, and stays its first
+    example.
   - `@puddleworks/capture-review-spec`: have an agent review the
     specification up for agreement; its findings become questions the outcome
     owner must settle before agreeing. Bring your own agent behavior, such as

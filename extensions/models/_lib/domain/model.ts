@@ -59,6 +59,42 @@ export interface Message {
 const text = z.string().max(10_000);
 const list = z.array(z.string().max(2_000)).max(100);
 
+export const PIECE_SHAPES = ["int", "repo", "word"] as const;
+
+/**
+ * What a recipe must answer, not how it is built: the builder picks the
+ * pattern, extension and method. The first example is the request's
+ * requested phrase, when it has one.
+ */
+export const RecipeSchema = z.object({
+  /** A turn it must answer, and what the answer shows. */
+  examples: z
+    .array(
+      z.object({
+        phrase: z.string().trim().min(1).max(500),
+        answer: z.string().max(2_000),
+      }),
+    )
+    .max(50),
+  /** What is taken from the phrase, and its shape. */
+  pieces: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(40),
+        shape: z.enum(PIECE_SHAPES),
+      }),
+    )
+    .max(20)
+    .default([]),
+  /** What to say when there is nothing to show. */
+  whenEmpty: z.string().max(2_000).default(""),
+  /** What a router's search found, for the builder to start from. */
+  candidateExtensions: z.array(z.string().min(1).max(200)).max(50).default(
+    [],
+  ),
+});
+export type Recipe = z.infer<typeof RecipeSchema>;
+
 export const SpecificationContentSchema = z.object({
   problemStatement: text,
   desiredOutcome: text,
@@ -70,6 +106,8 @@ export const SpecificationContentSchema = z.object({
       z.object({ id: z.string().min(1).max(40), text: z.string().max(2_000) }),
     )
     .max(100),
+  /** Every spec needs one to be proposed. Specs saved before recipes have none. */
+  recipe: RecipeSchema.optional(),
 });
 export type SpecificationContent = z.infer<typeof SpecificationContentSchema>;
 
@@ -128,6 +166,11 @@ export interface Request {
   title: string;
   initialDescription: string;
   currentProcess: string;
+  /**
+   * The turn a router couldn't answer, which the recipe must answer as
+   * asked. It never changes once recorded. Absent when none was given.
+   */
+  requestedPhrase?: string;
   outcomeOwnerId: string;
   status: RequestStatus;
   closedReason: string | null;
@@ -146,5 +189,9 @@ export const NewRequestSchema = z.object({
   title: z.string().trim().min(1, "Give the request a title.").max(200),
   initialDescription: z.string().trim().max(20_000),
   currentProcess: z.string().trim().max(20_000).default(""),
+  /** Blank means none. */
+  phrase: z.string().trim().max(500).optional(),
+  candidateExtensions: z.array(z.string().trim().min(1).max(200)).max(50)
+    .default([]),
 });
 export type NewRequest = z.input<typeof NewRequestSchema>;

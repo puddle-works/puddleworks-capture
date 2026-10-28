@@ -131,6 +131,7 @@ Check:
 5. Acceptance criteria: can each one be checked by someone who wasn't there, giving a yes or no? Prefer "given X, Y happens" to "works well".
 6. One reading: would ten builders understand the same outcome? Flag anything that could reasonably mean two different things.
 7. Assumptions: are they stated, and would a wrong one change what is built?
+8. Recipe: could someone who wasn't there tell, for each example phrase, whether an answer matches what the example says it shows? Does the recipe say what to answer when there is nothing to show?
 
 Answer with one JSON object and nothing else:
 
@@ -174,6 +175,12 @@ ${bullets(c.assumptions)}
 
 Acceptance criteria:
 ${bullets(c.acceptanceCriteria.map((a) => `${a.id}: ${a.text}`))}
+
+Recipe examples (phrase → answer):
+${bullets((c.recipe?.examples ?? []).map((e) => `${e.phrase} → ${e.answer}`))}
+
+When there is nothing to show:
+${c.recipe?.whenEmpty || "Not said."}
 `;
 }
 

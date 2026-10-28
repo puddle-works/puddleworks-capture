@@ -8,7 +8,9 @@ import { latestAgreed } from "./specification.ts";
 /**
  * puddleworks.dev/outcome-spec/v1: what was agreed, by whom, in a form any
  * process can pick up. It says what success looks like, not how to build it.
- * Add fields in a new version; never change the meaning of one here.
+ * An optional field may be added here, since readers ignore fields they
+ * don't know; anything else needs a new version. Never change the meaning of
+ * a field here.
  */
 export const OUTCOME_SPEC_V1 = "puddleworks.dev/outcome-spec/v1";
 
@@ -21,6 +23,8 @@ export const OutcomeSpecV1Schema = z.object({
     title: z.string(),
     initialDescription: z.string(),
     currentProcess: z.string(),
+    /** The phrase the recipe must answer as asked, when a router raised it. */
+    requestedPhrase: z.string().optional(),
     /** The request's page in Capture, where the discussion and agreement are. */
     url: z.url(),
   }),
@@ -67,6 +71,8 @@ export function toOutcomeSpecV1(
       title: request.title,
       initialDescription: request.initialDescription,
       currentProcess: request.currentProcess,
+      ...(request.requestedPhrase !== undefined &&
+        { requestedPhrase: request.requestedPhrase }),
       url,
     },
     specification: { version: spec.version, ...spec.content },
@@ -100,6 +106,29 @@ function bullets(items: string[]): string {
   return items.length ? items.map((i) => `- ${i}`).join("\n") : "None.";
 }
 
+/** One table cell: no line breaks, and a | that doesn't end the cell. */
+function cell(text: string): string {
+  return text.replace(/\s*\n\s*/g, " ").replaceAll("|", "\\|");
+}
+
+function recipeSection(doc: OutcomeSpecV1): string {
+  const recipe = doc.specification.recipe;
+  if (!recipe) return "None.";
+  const phrase = doc.request.requestedPhrase;
+  const rows = recipe.examples.map((e) =>
+    `| ${cell(e.phrase)} | ${cell(e.answer)} |`
+  );
+  const pieces = recipe.pieces.map((p) => `${p.name} (${p.shape})`);
+  return [
+    phrase !== undefined && `Requested as: "${phrase}"`,
+    ["| Phrase | Answer |", "| --- | --- |", ...rows].join("\n"),
+    recipe.whenEmpty && `When there is nothing to show: ${recipe.whenEmpty}`,
+    pieces.length > 0 && `Taken from the phrase: ${pieces.join(", ")}.`,
+    recipe.candidateExtensions.length > 0 &&
+    `Extensions to start from: ${recipe.candidateExtensions.join(", ")}.`,
+  ].filter(Boolean).join("\n\n");
+}
+
 /** The same document as Markdown, for pasting into any process. */
 export function toMarkdown(doc: OutcomeSpecV1): string {
   const s = doc.specification;
@@ -127,6 +156,7 @@ export function toMarkdown(doc: OutcomeSpecV1): string {
     `## Constraints\n\n${bullets(s.constraints)}`,
     `## Assumptions\n\n${bullets(s.assumptions)}`,
     `## Acceptance criteria\n\n${criteria}`,
+    `## Recipe\n\n${recipeSection(doc)}`,
     `## Open questions\n\n${questions}`,
     `## How it is done today\n\n${
       doc.request.currentProcess || "Not described."

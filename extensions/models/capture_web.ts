@@ -25,7 +25,7 @@ export type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 /** The behavior type: serves the read-only Capture page. */
 export const model = {
   type: "@puddleworks/capture/web",
-  version: "2026.10.28.2",
+  version: "2026.10.28.3",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -63,6 +63,11 @@ export const model = {
     {
       toVersion: "2026.10.28.2",
       description: "No settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.28.3",
+      description: "The page shows recipes; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

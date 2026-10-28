@@ -164,7 +164,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.28.2",
+  version: "2026.10.28.3",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -203,6 +203,11 @@ export const model = {
     {
       toVersion: "2026.10.28.2",
       description: "Snapshot export; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.28.3",
+      description: "Every spec has a recipe; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -394,6 +399,15 @@ export const model = {
         currentProcess: z.string().max(20_000).default("").describe(
           "How it is done today, if at all.",
         ),
+        phrase: z.string().max(500).default("").describe(
+          "The turn a router couldn't answer. It becomes the requested phrase: the first example of the draft spec's recipe, which must stay as asked. Blank for none.",
+        ),
+        candidateExtensions: z.preprocess(
+          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+          z.array(z.string().min(1).max(200)).max(50),
+        ).default([]).describe(
+          "Extensions a router's search found that may do most of the work, as a list or JSON text. They start the draft spec's recipe.",
+        ),
         idempotencyKey: z.string().min(1).max(200).optional().describe(
           "The same key from the same person always gives the same request, so a retry never makes a second one.",
         ),
@@ -404,6 +418,8 @@ export const model = {
           title: string;
           description: string;
           currentProcess: string;
+          phrase: string;
+          candidateExtensions: string[];
           idempotencyKey?: string;
         },
         context: CaptureContext,
@@ -415,6 +431,8 @@ export const model = {
               title: args.title,
               initialDescription: args.description,
               currentProcess: args.currentProcess,
+              phrase: args.phrase,
+              candidateExtensions: args.candidateExtensions,
             },
             args.idempotencyKey,
           );
@@ -641,7 +659,7 @@ export const model = {
           (v) => (typeof v === "string" ? JSON.parse(v) : v),
           SpecificationContentSchema,
         ).describe(
-          "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions and acceptanceCriteria [{id, text}], as an object or JSON text.",
+          "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions, acceptanceCriteria [{id, text}] and recipe {examples [{phrase, answer}], pieces [{name, shape: int, repo or word}], whenEmpty, candidateExtensions}, as an object or JSON text. Leave recipe out to keep the one there. A requested phrase must stay the recipe's first example.",
         ),
         basedOnMessageIds: z.array(z.string()).default([]).describe(
           "The messages it draws on.",

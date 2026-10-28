@@ -14,6 +14,7 @@ import {
   formatTime,
   historyEntries,
   numbered,
+  pieceLabels,
   plural,
   ROLE,
   STATUS,
@@ -79,6 +80,12 @@ function Request({ request: r }: { request: WebRequest }) {
         <h2 id="details-heading">Details</h2>
         <h3>What they asked for</h3>
         <Text value={r.initialDescription} />
+        {r.requestedPhrase && (
+          <>
+            <h3>Asked as</h3>
+            <p class="prose requested-phrase">“{r.requestedPhrase}”</p>
+          </>
+        )}
         <h3>How it's done today</h3>
         <Text value={r.currentProcess} />
       </section>
@@ -278,6 +285,7 @@ function Version({ spec }: { spec: Spec }) {
             ))}
           </dl>
         )}
+      <RecipeView recipe={content.recipe} />
       {spec.basedOnMessageIds.length > 0 && (
         <p class="card-meta">
           Draws on {plural(spec.basedOnMessageIds.length, "decision")}{" "}
@@ -285,6 +293,51 @@ function Version({ spec }: { spec: Spec }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** What the recipe must answer, and what it starts from. */
+function RecipeView({ recipe }: { recipe: Spec["content"]["recipe"] }) {
+  if (!recipe) {
+    return (
+      <>
+        <h3>Recipe</h3>
+        <p class="empty">None yet.</p>
+      </>
+    );
+  }
+  return (
+    <>
+      <h3>Recipe</h3>
+      {recipe.examples.length === 0
+        ? <p class="empty">No examples yet.</p>
+        : (
+          <dl class="examples">
+            {recipe.examples.map((e, n) => (
+              <div key={n}>
+                <dt>“{e.phrase}”</dt>
+                {e.answer.trim()
+                  ? <dd>{e.answer}</dd>
+                  : <dd class="empty">No answer yet.</dd>}
+              </div>
+            ))}
+          </dl>
+        )}
+      <h3>When there is nothing to show</h3>
+      <Text value={recipe.whenEmpty} />
+      {recipe.pieces.length > 0 && (
+        <List
+          title="Taken from the phrase"
+          items={pieceLabels(recipe.pieces)}
+        />
+      )}
+      {recipe.candidateExtensions.length > 0 && (
+        <List
+          title="Extensions to start from"
+          items={recipe.candidateExtensions}
+        />
+      )}
+    </>
   );
 }
 

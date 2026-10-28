@@ -10,6 +10,7 @@ import {
   badgeClass,
   historyEntries,
   numbered,
+  pieceLabels,
   plural,
   RECENT_PER_STAGE,
   routeOf,
@@ -117,5 +118,17 @@ describe("splitRecent", () => {
     const { recent, rest } = splitRecent([1, 2, 3, 4, 5].map(at));
     expect(recent.length).toBe(5);
     expect(rest).toEqual([]);
+  });
+});
+
+describe("pieceLabels", () => {
+  it("names each piece taken from the phrase, and its shape", () => {
+    expect(pieceLabels([{ name: "weeks", shape: "int" }, {
+      name: "project",
+      shape: "repo",
+    }])).toEqual(["weeks (a number)", "project (a repo)"]);
+    expect(pieceLabels([{ name: "label", shape: "word" }])).toEqual([
+      "label (a word)",
+    ]);
   });
 });

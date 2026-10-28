@@ -42,6 +42,7 @@ describe("specification problems", () => {
       "Desired outcome is empty.",
       "Nothing is in scope.",
       "There are no acceptance criteria.",
+      "The recipe has no examples: give at least one phrase it must answer, and what the answer shows.",
     ]);
   });
 

@@ -8,7 +8,12 @@ import {
   type Role,
 } from "./model.ts";
 import { participantOf, requirePermission } from "./permissions.ts";
+import { startingSpec } from "./recipe.ts";
 
+/**
+ * A draft owned by `owner`. A phrase, or the extensions a router found,
+ * start the draft spec's recipe; the phrase becomes the requested phrase.
+ */
 export function createRequest(
   input: NewRequest,
   owner: Person,
@@ -21,8 +26,13 @@ export function createRequest(
       parsed.error.issues.map((i) => i.message).join(" "),
     );
   }
+  const { phrase, candidateExtensions, ...fields } = parsed.data;
+  const requestedPhrase = phrase || undefined;
+  const starts = requestedPhrase !== undefined ||
+    candidateExtensions.length > 0;
   return {
-    ...parsed.data,
+    ...fields,
+    ...(requestedPhrase !== undefined && { requestedPhrase }),
     outcomeOwnerId: owner.userId,
     status: "draft",
     closedReason: null,
@@ -37,7 +47,17 @@ export function createRequest(
       },
     ],
     messages: [],
-    specifications: [],
+    specifications: starts
+      ? [{
+        version: 1,
+        status: "draft",
+        content: startingSpec(requestedPhrase, candidateExtensions),
+        basedOnMessageIds: [],
+        createdBy: owner.userId,
+        createdAt: at,
+        updatedAt: at,
+      }]
+      : [],
     agreements: [],
     exports: [],
     transitions: [],
