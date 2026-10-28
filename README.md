@@ -156,12 +156,36 @@ TypeScript with no I/O.
 To try the extension from this checkout without publishing, in another swamp
 repository: `swamp extension source add <path to this checkout>`.
 
+### Move Capture to another repository
+
+Capture's record is swamp data in one repository. To move it, export a
+`capture-snapshot/v1` file there and import it in the new repository, where
+`capture` is set up as above. The file holds everything: the people list with
+their emails, and every request whatever its sharing, with its number, messages,
+specification versions, history and idempotency keys. It is written readable by
+you only and never over an existing file. Keep it out of git and delete it once
+the move is checked.
+
+```bash
+# In the old repository
+swamp behavior run capture export_snapshot --input path=capture-snapshot.json
+# In the new one
+swamp behavior run capture import --input path=/full/path/to/capture-snapshot.json
+```
+
+Each request keeps its number unless the new repository already has a request
+with it; then it gets the next free one. Check `import-latest`: on an empty
+repository `requestsNumbered` is 0 and `requestsAdded` equals `requests` in the
+old repository's `export-latest`. A program that logs with the same `sourceRef`
+afterwards gets back the same request, as long as it acts as the same person.
+
 ### Bring in data from the Node app
 
 The retired Node app exported everything it held (people without passwords, and
 requests with their idempotency keys and history) as one `capture-snapshot/v1`
-file. `import` brings such a file in, as many times as needed: what is already
-there is skipped, and what is new is numbered after the requests already here.
+file, with no request numbers. `import` brings such a file in, as many times as
+needed: what is already there is skipped, and what is new is numbered after the
+requests already here.
 
 ```bash
 swamp behavior run capture import --input path=capture-snapshot.json

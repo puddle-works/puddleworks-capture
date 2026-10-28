@@ -1,5 +1,6 @@
-// capture-snapshot/v1: everything Capture's old Node app held, as one JSON
-// file, so the import method can bring it into swamp data.
+// capture-snapshot/v1: everything Capture holds, as one JSON file. The
+// export_snapshot method writes it, as Capture's old Node app did, and the
+// import method brings it into swamp data, in this repository or another.
 import { z } from "npm:zod@4.6.5";
 import type { Person } from "../domain/index.ts";
 import type { Stored } from "./ports.ts";
@@ -38,6 +39,8 @@ const StoredSchema = z.object({
     .nullable()
     .default(null),
   legacy: z.unknown().default(null),
+  // The old Node app's snapshots have none.
+  number: z.number().int().min(1).nullable().default(null),
 });
 
 export const SnapshotSchema = z.object({
@@ -51,8 +54,8 @@ export interface Snapshot {
   format: "capture-snapshot/v1";
   exportedAt: string;
   people: Person[];
-  // The Node app had no numbers; the import gives them out.
-  requests: Omit<Stored, "number">[];
+  // The Node app had no numbers; the import gives them out where missing.
+  requests: (Omit<Stored, "number"> & { number?: number | null })[];
 }
 
 export interface ImportCounts {
