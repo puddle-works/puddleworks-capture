@@ -162,6 +162,46 @@ describe("@puddleworks/capture/requests", () => {
     expect(versions.at(-1)!.attributes).toEqual(versions[0].attributes);
   });
 
+  it("logs a requested phrase into the draft spec's recipe", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Count list",
+      description: "Asked in chat.",
+      phrase: "what needs counting this week",
+      candidateExtensions: JSON.stringify(["@example/stock"]),
+      idempotencyKey: "turn-2",
+    });
+    const request = swamp.data(created.dataHandles[0].name)!;
+    expect(request).toMatchObject({
+      requestedPhrase: "what needs counting this week",
+      specifications: [{
+        version: 1,
+        status: "draft",
+        content: {
+          recipe: {
+            examples: [{ phrase: "what needs counting this week", answer: "" }],
+            candidateExtensions: ["@example/stock"],
+          },
+        },
+      }],
+    });
+  });
+
+  it("leaves the requested phrase out when it is blank, as the workflow sends it", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+      phrase: "",
+      candidateExtensions: [],
+    });
+    const request = swamp.data(created.dataHandles[0].name)!;
+    expect("requestedPhrase" in request).toBe(false);
+    expect(request.specifications).toEqual([]);
+  });
+
   it("refuses to act without knowing who for", async () => {
     const { run } = setup();
     await people(run);

@@ -168,6 +168,17 @@ describe("the review prompt", () => {
     );
   });
 
+  it("holds the recipe's examples and asks whether they can be checked", () => {
+    const prompt = reviewPrompt(reviewing());
+    expect(prompt).toContain(
+      "Recipe examples (phrase → answer):\n- what should I order this week → Each item to order and how many.",
+    );
+    expect(prompt).toContain(
+      "When there is nothing to show:\nNothing needs ordering.",
+    );
+    expect(prompt).toMatch(/Recipe: could someone who wasn't there/);
+  });
+
   it("isn't given the discussion", () => {
     const r = reviewing();
     const prompt = reviewPrompt({

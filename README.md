@@ -74,6 +74,32 @@ method's `id` takes the number (`12` or `#12`) as well as the request's id, as
 does the page's address (`/requests/12`). Requests saved before numbers get
 theirs, oldest first, on the next `create_request` or `import`.
 
+### Every spec has a recipe
+
+A specification says what the request needs, and its recipe says what must
+answer it: the phrases someone will ask (`examples`, each with what the answer
+shows), what to answer when there is nothing to show (`whenEmpty`), any pieces
+taken from the phrase (`pieces`, each an `int`, `repo` or `word`), and
+extensions to start from (`candidateExtensions`). It says what, not how. A spec
+can't be proposed until its recipe has at least one example and every example
+has an answer.
+
+A request raised with the phrase it was asked as (`create_request`'s `phrase`)
+keeps it as `requestedPhrase`. Its draft spec starts with that phrase as the
+recipe's first example and an `R1` acceptance criterion naming it. The phrase is
+the requirement: an edit that rewords it or moves it from first is refused, and
+the spec can't be proposed while no criterion names it. Other phrasings can be
+added after it. An `edit_specification` that leaves the recipe out keeps the one
+already there. The exported `outcome-spec/v1` carries the recipe and the
+requested phrase as optional fields, and the Markdown has a Recipe section.
+
+```bash
+swamp behavior run capture create_request --input title="Weekly stock counts" \
+  --input description="We copy counts from paper every Friday." \
+  --input phrase="what needs counting this week" \
+  --input candidateExtensions='["@example/stock"]'
+```
+
 The same `idempotencyKey` from the same person always gives back the same
 request. Reads (`get_request`, `list_requests`) write what they found as `view`
 and `requestList` data; `export_outcome_spec` writes `outcomeSpec` or
@@ -87,8 +113,13 @@ idempotency key:
 
 ```bash
 swamp workflow run @puddleworks/capture-log-request --input title="…" \
-  --input description="…" --input currentProcess="…" --input sourceRef=turn-3f9a
+  --input description="…" --input currentProcess="…" --input sourceRef=turn-3f9a \
+  --input phrase="what needs counting this week" \
+  --input candidateExtensions='["@example/stock"]'
 ```
+
+`phrase` and `candidateExtensions` are optional; given, they start the draft
+spec's recipe.
 
 It replaces `@puddleworks/capture-client`, which called the Node app's API.
 

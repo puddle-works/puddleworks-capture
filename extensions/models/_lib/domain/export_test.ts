@@ -67,6 +67,29 @@ describe("outcome-spec/v1", () => {
     expect(OutcomeSpecV1Schema.parse(doc)).toEqual(doc);
   });
 
+  it("carries the requested phrase, and leaves it out when there is none", () => {
+    const r = { ...agreedRequest(), requestedPhrase: "what should I order" };
+    expect(toOutcomeSpecV1(r, T2, PAGE).request.requestedPhrase).toBe(
+      "what should I order",
+    );
+    expect(
+      "requestedPhrase" in toOutcomeSpecV1(agreedRequest(), T2, PAGE).request,
+    )
+      .toBe(false);
+  });
+
+  it("still reads a spec agreed before recipes", () => {
+    const { recipe: _, ...noRecipe } = goodSpec;
+    const r = agreedRequest();
+    const old = {
+      ...r,
+      specifications: [{ ...r.specifications[0], content: noRecipe }],
+    };
+    const doc = toOutcomeSpecV1(old, T2, PAGE);
+    expect(OutcomeSpecV1Schema.parse(doc)).toEqual(doc);
+    expect(toMarkdown(doc)).toContain("## Recipe\n\nNone.\n");
+  });
+
   it("lists questions asked after agreement", () => {
     const r = postMessage(agreedRequest(), builder, {
       id: "q9",
@@ -145,6 +168,14 @@ Counts are entered once and the order list is ready.
 - [ ] **AC1** A count can be entered in under a minute
 - [ ] **AC2** The order list matches the spreadsheet for last week
 
+## Recipe
+
+| Phrase | Answer |
+| --- | --- |
+| what should I order this week | Each item to order and how many. |
+
+When there is nothing to show: Nothing needs ordering.
+
 ## Open questions
 
 None.
@@ -172,5 +203,40 @@ puddleworks.dev/outcome-spec/v1 · [request r-1](https://capture.example/request
       specification: { ...doc.specification, constraints: [] },
     });
     expect(md).toContain("## Constraints\n\nNone.\n");
+  });
+
+  it("shows the requested phrase, the pieces and where to start", () => {
+    const doc = toOutcomeSpecV1(
+      { ...agreedRequest(), requestedPhrase: "what should I order this week" },
+      T2,
+      PAGE,
+    );
+    const md = toMarkdown({
+      ...doc,
+      specification: {
+        ...doc.specification,
+        recipe: {
+          examples: [{ phrase: "what's in a|b", answer: "Two\nlines" }],
+          pieces: [{ name: "repo", shape: "repo" }],
+          whenEmpty: "",
+          candidateExtensions: ["@example/stock"],
+        },
+      },
+    });
+    expect(md).toContain(
+      `## Recipe
+
+Requested as: "what should I order this week"
+
+| Phrase | Answer |
+| --- | --- |
+| what's in a\\|b | Two lines |
+
+Taken from the phrase: repo (repo).
+
+Extensions to start from: @example/stock.
+
+## Open questions`,
+    );
   });
 });

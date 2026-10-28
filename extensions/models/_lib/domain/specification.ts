@@ -10,9 +10,16 @@ import {
   type SpecificationVersion,
 } from "./model.ts";
 import { requirePermission } from "./permissions.ts";
+import { recipeProblems, requirePhraseKept } from "./recipe.ts";
 
-/** What stops a draft being proposed, in plain words. Empty means ready. */
-export function specificationProblems(content: SpecificationContent): string[] {
+/**
+ * What stops a draft being proposed, in plain words. Empty means ready.
+ * `requestedPhrase` is the request's, which the recipe must keep.
+ */
+export function specificationProblems(
+  content: SpecificationContent,
+  requestedPhrase?: string,
+): string[] {
   const problems: string[] = [];
   if (!content.problemStatement.trim()) {
     problems.push("Problem statement is empty.");
@@ -36,7 +43,7 @@ export function specificationProblems(content: SpecificationContent): string[] {
   for (const { id, text } of content.acceptanceCriteria) {
     if (!text.trim()) problems.push(`Acceptance criterion ${id} has no text.`);
   }
-  return problems;
+  return [...problems, ...recipeProblems(content, requestedPhrase)];
 }
 
 /** Agreeing, or proposing, waits until every question has an answer. */
@@ -71,7 +78,10 @@ function replaceLatest(
   return [...request.specifications.slice(0, -1), spec];
 }
 
-/** Saves the draft: edits the latest draft version, or starts the next one. */
+/**
+ * Saves the draft: edits the latest draft version, or starts the next one.
+ * Content with no recipe keeps the one the latest version has.
+ */
 export function editSpecification(
   request: Request,
   actor: Person,
@@ -96,13 +106,16 @@ export function editSpecification(
     );
   }
   const latest = latestSpecification(request);
+  const recipe = parsed.data.recipe ?? latest?.content.recipe;
+  const edited = recipe ? { ...parsed.data, recipe } : parsed.data;
+  requirePhraseKept(edited, request.requestedPhrase);
   if (latest?.status === "draft") {
     return {
       ...request,
       updatedAt: at,
       specifications: replaceLatest(request, {
         ...latest,
-        content: parsed.data,
+        content: edited,
         basedOnMessageIds,
         updatedAt: at,
       }),
@@ -111,7 +124,7 @@ export function editSpecification(
   const next: SpecificationVersion = {
     version: (latest?.version ?? 0) + 1,
     status: "draft",
-    content: parsed.data,
+    content: edited,
     basedOnMessageIds,
     createdBy: actor.userId,
     createdAt: at,
@@ -133,7 +146,10 @@ export function propose(request: Request, actor: Person, at: string): Request {
       "There is no draft specification to propose.",
     );
   }
-  const problems = specificationProblems(latest.content);
+  const problems = specificationProblems(
+    latest.content,
+    request.requestedPhrase,
+  );
   if (problems.length > 0) {
     throw new DomainError(
       "invalid_state",

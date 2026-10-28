@@ -47,6 +47,7 @@ export function toRequestView(stored: Stored, viewer: Person) {
     ...toSummary(stored, viewer),
     initialDescription: request.initialDescription,
     currentProcess: request.currentProcess,
+    requestedPhrase: request.requestedPhrase ?? null,
     closedReason: request.closedReason,
     participants: request.participants.map((p) => ({ ...p })),
     specification: spec
@@ -87,13 +88,14 @@ export function toWebRequest(stored: Stored): WebRequest {
     ...toWebSummary(stored),
     initialDescription: request.initialDescription,
     currentProcess: request.currentProcess,
+    requestedPhrase: request.requestedPhrase ?? null,
     closedReason: request.closedReason,
     participants: request.participants,
     messages: request.messages,
     specifications: request.specifications.map((s) => ({
       ...s,
       createdByName: nameOf(request, s.createdBy),
-      problems: specificationProblems(s.content),
+      problems: specificationProblems(s.content, request.requestedPhrase),
     })),
     agreements: request.agreements.map((a) => ({
       specVersion: a.specVersion,

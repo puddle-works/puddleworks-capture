@@ -399,6 +399,28 @@ main .problems p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.examples {
+  margin-bottom: 16px;
+}
+.examples > div {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.examples > div:last-child {
+  border-bottom: none;
+}
+.examples dt {
+  color: var(--color-accent);
+  overflow-wrap: anywhere;
+}
+.examples dd {
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.requested-phrase {
+  color: var(--color-accent);
+}
 main ul.versions,
 main ul.agreements {
   list-style: none;

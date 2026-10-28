@@ -39,6 +39,8 @@ export interface WebSummary {
 export interface WebRequest extends WebSummary {
   initialDescription: string;
   currentProcess: string;
+  /** The phrase the recipe must answer as asked, or null if none was given. */
+  requestedPhrase: string | null;
   closedReason: string | null;
   participants: Participant[];
   messages: Message[];

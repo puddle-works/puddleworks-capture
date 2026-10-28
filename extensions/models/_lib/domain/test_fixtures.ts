@@ -60,6 +60,15 @@ export const goodSpec: SpecificationContent = {
     { id: "AC1", text: "A count can be entered in under a minute" },
     { id: "AC2", text: "The order list matches the spreadsheet for last week" },
   ],
+  recipe: {
+    examples: [{
+      phrase: "what should I order this week",
+      answer: "Each item to order and how many.",
+    }],
+    pieces: [],
+    whenEmpty: "Nothing needs ordering.",
+    candidateExtensions: [],
+  },
 };
 
 export function draftRequest(): Request {

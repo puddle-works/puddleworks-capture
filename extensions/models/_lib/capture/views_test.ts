@@ -93,6 +93,25 @@ describe("viewer views", () => {
     expect(view.before).toBe(null);
   });
 
+  it("show the requested phrase, and hold the spec's problems to it", () => {
+    const phrase = "what needs counting this week";
+    const view = toWebRequest(
+      stored({ ...agreedRequest(), requestedPhrase: phrase }),
+    );
+    expect(view.requestedPhrase).toBe(phrase);
+    expect(view.specifications[0].problems).toContain(
+      `No acceptance criterion names the requested phrase "${phrase}".`,
+    );
+    expect(toWebRequest(stored()).requestedPhrase).toBe(null);
+    expect(
+      toRequestView(
+        stored({ ...agreedRequest(), requestedPhrase: phrase }),
+        owner,
+      )
+        .requestedPhrase,
+    ).toBe(phrase);
+  });
+
   it("give a request saved before numbers no number", () => {
     expect(toWebSummary({ ...stored(), number: null }).number).toBe(null);
   });

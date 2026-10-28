@@ -8,6 +8,7 @@ export * from "./lifecycle.ts";
 export * from "./model.ts";
 export * from "./outcome_spec_v1.ts";
 export * from "./permissions.ts";
+export { recipeProblems, requestedCriterion } from "./recipe.ts";
 export {
   createRequest,
   decline,

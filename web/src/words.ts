@@ -3,6 +3,7 @@
 // words_test runs it under deno test.
 import type {
   ExportFormat,
+  Recipe,
   Role,
 } from "../../extensions/models/_lib/domain/model.ts";
 import type {
@@ -98,6 +99,17 @@ export function formatTime(iso: string): string {
 
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+const SHAPE: Record<Recipe["pieces"][number]["shape"], string> = {
+  int: "a number",
+  repo: "a repo",
+  word: "a word",
+};
+
+/** The pieces a recipe takes from the phrase, as "weeks (a number)". */
+export function pieceLabels(pieces: Recipe["pieces"]): string[] {
+  return pieces.map((p) => `${p.name} (${SHAPE[p.shape]})`);
 }
 
 /** "ready_for_agreement" → "ready for agreement" */
