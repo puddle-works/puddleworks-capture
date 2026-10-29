@@ -234,10 +234,10 @@ changes marks it `changes_requested` and the next edit starts a new version.
 ### Lifecycle
 
 ```
-Draft ──submit──▶ Discussing ──propose──▶ Ready for agreement ──agree──▶ Agreed ──export──▶ Exported
-  │                  ▲   │                      │                          │                 │
-  │                  │   └────── withdraw ──────┴──────── (owner) ─────────┤                 │
-  │                  └──────── request changes / revise ◀──────────────────┴─────────────────┘
+Draft ──submit──▶ Discussing ──propose──▶ Ready for agreement ──agree──▶ Agreed
+  │                  ▲   │                      │                          │
+  │                  │   └────── withdraw ──────┴──────── (owner) ─────────┤
+  │                  └──────── request changes / revise ◀──────────────────┘
   └─ withdraw
 ```
 
@@ -246,10 +246,12 @@ Draft ──submit──▶ Discussing ──propose──▶ Ready for agreemen
 - **Ready for agreement**: a spec version is `proposed` and frozen. A reviewer
   may ask questions or ask for changes. Owner agrees once no question is open,
   or asks for changes (back to Discussing, new draft version).
-- **Agreed**: agreement recorded against an exact spec version + hash.
-- **Exported**: at least one export made. Export again any time.
-- **Revise** from Agreed/Exported: opens a new draft version; the old agreement
-  and exports stay in history, marked `superseded` only when a new version is
+- **Agreed**: agreement recorded against an exact spec version + hash. Agreeing
+  is the hand-off: it writes the outcome spec. Exporting again records an export
+  and leaves the request Agreed. (There was once an Exported status; a request
+  saved with it reads as Agreed.)
+- **Revise** from Agreed: opens a new draft version; the old agreement and
+  exports stay in history, marked `superseded` only when a new version is
   agreed.
 - **Withdrawn** (terminal, owner) and **Declined** (terminal, builder says
   "won't take this").

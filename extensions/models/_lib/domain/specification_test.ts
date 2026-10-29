@@ -240,10 +240,20 @@ describe("agreement", () => {
 });
 
 describe("export record", () => {
-  it("records the agreed version each time it is exported", () => {
+  it("refuses a request that isn't agreed, such as one being revised", () => {
+    const revising = revise(agreedRequest(), owner, T2);
+    expect(() => recordExport(revising, builder, "markdown", T2))
+      .toThrowError(expect.objectContaining({
+        code: "invalid_state",
+        message: expect.stringContaining("must be agreed"),
+      }));
+  });
+
+  it("records the agreed version each time it is exported, and leaves it agreed", () => {
     let r = recordExport(agreedRequest(), owner, "outcome-spec/v1+json", T1);
     r = recordExport(r, builder, "markdown", T2);
-    expect(r.status).toBe("exported");
+    expect(r.status).toBe("agreed");
+    expect(r.updatedAt).toBe(T2);
     expect(r.exports.map((e) => [e.specVersion, e.format, e.exportedBy]))
       .toEqual([
         [1, "outcome-spec/v1+json", owner.userId],

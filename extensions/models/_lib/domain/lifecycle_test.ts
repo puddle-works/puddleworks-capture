@@ -11,8 +11,10 @@ import {
   submit,
   TERMINAL_STATUSES,
   TRANSITIONS,
+  upgradeRequest,
   withdraw,
 } from "./index.ts";
+import type { Request } from "./model.ts";
 import {
   agreedRequest,
   builder,
@@ -29,7 +31,6 @@ describe("transition table", () => {
       TRANSITIONS[a].from.map((f) => `${f} -${a}-> ${TRANSITIONS[a].to}`)
     ).sort();
     expect(edges).toEqual([
-      "agreed -export-> exported",
       "agreed -revise-> discussing",
       "agreed -withdraw-> withdrawn",
       "discussing -decline-> declined",
@@ -37,14 +38,16 @@ describe("transition table", () => {
       "discussing -withdraw-> withdrawn",
       "draft -submit-> discussing",
       "draft -withdraw-> withdrawn",
-      "exported -export-> exported",
-      "exported -revise-> discussing",
-      "exported -withdraw-> withdrawn",
       "ready_for_agreement -agree-> agreed",
       "ready_for_agreement -decline-> declined",
       "ready_for_agreement -requestChanges-> discussing",
       "ready_for_agreement -withdraw-> withdrawn",
     ]);
+  });
+
+  it("has no export step: agreeing is the hand-off", () => {
+    expect(ACTIONS).not.toContain("export");
+    expect(REQUEST_STATUSES).not.toContain("exported");
   });
 
   it("reaches every status from draft", () => {
@@ -73,19 +76,18 @@ describe("transition table", () => {
 });
 
 describe("primary journey", () => {
-  it("goes draft → discussing → ready → agreed → exported, recording each step", () => {
+  it("goes draft → discussing → ready → agreed, and exporting moves nothing", () => {
     const r = recordExport(
       agreedRequest(),
       builder,
       "outcome-spec/v1+json",
       T2,
     );
-    expect(r.status).toBe("exported");
+    expect(r.status).toBe("agreed");
     expect(r.transitions.map((t) => `${t.from}->${t.to}:${t.action}`)).toEqual([
       "draft->discussing:submit",
       "discussing->ready_for_agreement:propose",
       "ready_for_agreement->agreed:agree",
-      "agreed->exported:export",
     ]);
     expect(r.transitions[2]).toMatchObject({ by: owner.userId, at: T2 });
   });
@@ -149,5 +151,37 @@ describe("guards", () => {
         "Can't submit a request that is discussing; it must be draft.",
       );
     }
+  });
+});
+
+describe("a request saved before agreeing was the hand-off", () => {
+  it("reads exported as agreed, in its status and its history, and keeps its exports", () => {
+    const agreed = recordExport(agreedRequest(), builder, "markdown", T2);
+    // As an older Capture saved it, with an export step.
+    const old = {
+      ...agreed,
+      status: "exported",
+      transitions: [...agreed.transitions, {
+        from: "agreed",
+        to: "exported",
+        action: "export",
+        by: builder.userId,
+        at: T2,
+        note: null,
+      }],
+    } as unknown as Request;
+    const r = upgradeRequest(old);
+    expect(r.status).toBe("agreed");
+    expect(r.transitions.at(-1)).toMatchObject({
+      from: "agreed",
+      to: "agreed",
+      action: "export",
+    });
+    expect(r.exports).toEqual(agreed.exports);
+  });
+
+  it("leaves any other request as it is", () => {
+    const r = agreedRequest();
+    expect(upgradeRequest(r)).toBe(r);
   });
 });

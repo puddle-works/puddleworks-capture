@@ -40,6 +40,7 @@ import {
   submit,
   toMarkdown,
   toOutcomeSpecV1,
+  upgradeRequest,
   withdraw,
 } from "../domain/index.ts";
 import type { CaptureStore, Stored } from "./ports.ts";
@@ -63,7 +64,6 @@ const OPEN: readonly RequestStatus[] = [
   "discussing",
   "ready_for_agreement",
   "agreed",
-  "exported",
 ];
 
 /** The specification's ETag: changes whenever the current version is edited or moves on. */
@@ -413,15 +413,29 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         (r, p, at) => recordReview(r, p, review, { newId, version }, at),
       ),
 
-    agree: (as: string, id: string, version: number) =>
-      mutate(as, id, async (r, p, at) => {
+    /** Agreeing is the hand-off: it gives the outcome spec, as of agreeing. */
+    async agree(
+      as: string,
+      id: string,
+      version: number,
+    ): Promise<{ stored: Stored; document: OutcomeSpecV1 }> {
+      const stored = await mutate(as, id, async (r, p, at) => {
         // An unknown version is refused by agree() as not the one up for agreement.
         const spec = r.specifications.find((s) => s.version === version);
         return agree(r, p, {
           version,
           specHash: spec ? await sha256(specHashInput(spec.content)) : "",
         }, at);
-      }),
+      });
+      return {
+        stored,
+        document: toOutcomeSpecV1(
+          stored.request,
+          stored.request.updatedAt,
+          `${appUrl}/requests/${stored.request.id}`,
+        ),
+      };
+    },
 
     async export(
       as: string,
@@ -512,7 +526,7 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         taken.add(number);
         adding.push({
           ...incoming,
-          request: incoming.request as unknown as Request,
+          request: upgradeRequest(incoming.request as unknown as Request),
           number,
         });
         counts.requestsAdded++;

@@ -1,6 +1,6 @@
 import { openQuestions } from "./discussion.ts";
 import { DomainError } from "./errors.ts";
-import { applyTransition, checkTransition } from "./lifecycle.ts";
+import { applyTransition, checkTransition, statusWords } from "./lifecycle.ts";
 import {
   type ExportFormat,
   type Person,
@@ -245,10 +245,19 @@ export function recordExport(
   format: ExportFormat,
   at: string,
 ): Request {
-  checkTransition(request, actor, "export");
+  requirePermission(request, actor, "export");
+  if (request.status !== "agreed") {
+    throw new DomainError(
+      "invalid_state",
+      `Can't export a request that is ${
+        statusWords(request.status)
+      }; it must be agreed.`,
+    );
+  }
   const agreed = latestAgreed(request)!;
   return {
-    ...applyTransition(request, actor, "export", at),
+    ...request,
+    updatedAt: at,
     exports: [...request.exports, {
       specVersion: agreed.version,
       format,

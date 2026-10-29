@@ -33,9 +33,10 @@ Distribution:
   one process from one container. PostgreSQL through Drizzle.
 - **Domain:** Request, Participant, Message, Outcome Specification (versioned),
   Agreement, Export. Lifecycle: Draft → Discussing → Ready for agreement →
-  Agreed → Exported, plus Withdrawn and Declined. The rules live in
-  `packages/domain`, pure TypeScript with no I/O, so a future Expo app can use
-  the same schemas.
+  Agreed → Exported, plus Withdrawn and Declined. (Later, agreeing became the
+  hand-off and Exported was dropped: an agreed request has its outcome spec.)
+  The rules live in `packages/domain`, pure TypeScript with no I/O, so a future
+  Expo app can use the same schemas.
 - **Hand-off:** one neutral format, `puddleworks.dev/outcome-spec/v1` (JSON and
   Markdown), that any process can pick up. Capture no longer writes
   `app-spec/v1`; Factory moves to the new format separately.

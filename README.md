@@ -57,8 +57,10 @@ behavior's `defaultAs` when `as` is left out. Their role on the request decides
 what they may do, as before: the outcome owner submits, agrees, withdraws and
 exports; builders join open requests and write the specification; reviewers ask
 questions and ask for changes; observers read. Agreeing waits until every
-question is resolved. There is no sign-in, so anyone who can run swamp in the
-repository can act as anyone on the list.
+question is resolved. Agreeing is the hand-off: it writes the agreed version as
+an `outcomeSpec` document (`outcome-spec-<id>`) for the builder, and the request
+stays Agreed. There is no sign-in, so anyone who can run swamp in the repository
+can act as anyone on the list.
 
 ```bash
 swamp behavior run capture create_request --input title="Weekly stock counts" \
@@ -102,8 +104,9 @@ swamp behavior run capture create_request --input title="Weekly stock counts" \
 
 The same `idempotencyKey` from the same person always gives back the same
 request. Reads (`get_request`, `list_requests`) write what they found as `view`
-and `requestList` data; `export_outcome_spec` writes `outcomeSpec` or
-`outcomeSpecMarkdown`.
+and `requestList` data; `agree` writes `outcomeSpec`, and `export_outcome_spec`
+writes it again, or `outcomeSpecMarkdown`, recording the export without moving
+the request on. A request an older Capture saved as Exported reads as Agreed.
 
 ### Log requests from a program
 

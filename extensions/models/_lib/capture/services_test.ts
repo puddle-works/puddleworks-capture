@@ -153,7 +153,7 @@ describe("requests", () => {
     ]);
   });
 
-  it("goes from draft to exported, with the request's page in the outcome spec", async () => {
+  it("goes from draft to agreed, and agreeing gives the outcome spec export gives", async () => {
     const { services } = await setup();
     const { stored } = await services.create(OLIVE, draft);
     const id = stored.request.id;
@@ -165,18 +165,22 @@ describe("requests", () => {
     }, null);
     await services.propose(BEA, id);
     const agreed = await services.agree(OLIVE, id, 1);
-    expect(agreed.request.status).toBe("agreed");
-    expect(agreed.request.agreements[0].specHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(agreed.stored.request.status).toBe("agreed");
+    const agreement = agreed.stored.request.agreements[0];
+    expect(agreement.specHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(agreed.document).toMatchObject({
+      format: "puddleworks.dev/outcome-spec/v1",
+      request: { id, url: `http://127.0.0.1:3002/requests/${id}` },
+      exportedAt: agreement.agreedAt,
+    });
     const { stored: exported, document } = await services.export(
       BEA,
       id,
       "outcome-spec/v1+json",
     );
-    expect(exported.request.status).toBe("exported");
-    expect(document).toMatchObject({
-      format: "puddleworks.dev/outcome-spec/v1",
-      request: { id, url: `http://127.0.0.1:3002/requests/${id}` },
-    });
+    expect(exported.request.status).toBe("agreed");
+    expect(exported.request.exports).toHaveLength(1);
+    expect(document).toEqual(agreed.document);
     const markdown = await services.export(BEA, id, "markdown");
     expect(typeof markdown.document).toBe("string");
   });
@@ -451,6 +455,24 @@ describe("import", () => {
 });
 
 describe("export", () => {
+  it("brings a request saved as exported in as agreed", async () => {
+    const from = await setup();
+    const { stored } = await from.services.create(OLIVE, draft);
+    const snapshot = JSON.parse(
+      JSON.stringify(await from.services.exportSnapshot()),
+    ) as Snapshot;
+    const old = snapshot.requests[0].request as unknown as Record<
+      string,
+      unknown
+    >;
+    old.status = "exported";
+    const to = empty();
+    await to.services.importSnapshot(snapshot);
+    expect(to.store.requests.get(stored.request.id)?.request.status).toBe(
+      "agreed",
+    );
+  });
+
   function empty() {
     const store = new MemoryStore();
     let n = 0;

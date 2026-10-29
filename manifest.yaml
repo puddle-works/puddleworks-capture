@@ -1,11 +1,12 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.10.28.3"
+version: "2026.10.28.4"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
-  specification, reviewed, agreed, and exported as outcome-spec/v1 JSON or
-  Markdown. Every specification has a recipe: the phrases it must answer and
+  specification, reviewed and agreed. Agreeing writes it as outcome-spec/v1
+  JSON for the builder; it can be exported again as JSON or Markdown. Every
+  specification has a recipe: the phrases it must answer and
   what each answer shows. Everything is kept in swamp data.
 
   ## Models

@@ -15,7 +15,8 @@
  * - `view`: one request as the person asking sees it (`view-<id>`).
  * - `requestList`: the requests in one scope and status (`requests-<scope>-<status>`).
  * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
- * - `outcomeSpec`: an exported outcome-spec/v1 document (`outcome-spec-<id>`).
+ * - `outcomeSpec`: the outcome-spec/v1 document, written on agreeing and on
+ *   each export (`outcome-spec-<id>`).
  * - `outcomeSpecMarkdown`: the same, as Markdown (`outcome-spec-md-<id>`).
  * - `exportResult`: what the last snapshot export wrote (`export-latest`).
  * - `importResult`: what the last import brought in (`import-latest`).
@@ -129,7 +130,10 @@ function actingAs(args: { as?: string }, context: CaptureContext): string {
   return who;
 }
 
-/** A method that acts on one request and saves it, logged as `done`, such as "Submitted". */
+/**
+ * A method that acts on one request and saves it, logged as `done`, such as
+ * "Submitted". `use` may write more data through `context`, adding it to `store`.
+ */
 function change<A extends { as?: string; id: string }>(
   description: string,
   done: string,
@@ -138,14 +142,22 @@ function change<A extends { as?: string; id: string }>(
     services: Services,
     as: string,
     args: A,
+    context: CaptureContext,
+    store: SwampStore,
   ) => Promise<Stored | { stored: Stored }>,
 ) {
   return {
     description,
     arguments: argumentsSchema,
     execute: (args: A, context: CaptureContext): Output =>
-      run(context, async (services) => {
-        const out = await use(services, actingAs(args, context), args);
+      run(context, async (services, store) => {
+        const out = await use(
+          services,
+          actingAs(args, context),
+          args,
+          context,
+          store,
+        );
         const stored = "stored" in out ? out.stored : out;
         context.logger.info(
           "{done} request #{number} ({id}): now {status}, version {version}",
@@ -164,7 +176,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.28.3",
+  version: "2026.10.28.4",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -208,6 +220,12 @@ export const model = {
     {
       toVersion: "2026.10.28.3",
       description: "Every spec has a recipe; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.28.4",
+      description:
+        "Agreeing writes the outcome spec; no Exported status; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -290,7 +308,8 @@ export const model = {
       garbageCollection: 10,
     },
     outcomeSpec: {
-      description: "An exported outcome-spec/v1 document.",
+      description:
+        "The outcome-spec/v1 document, written on agreeing and on each export.",
       schema: OutcomeSpecSchema,
       lifetime: "infinite" as const,
       garbageCollection: 10,
@@ -573,14 +592,24 @@ export const model = {
       (s, who, a) => s.requestChanges(who, a.id, a.note),
     ),
     agree: change(
-      "Agree to the proposed specification version. Only the outcome owner can.",
+      "Agree to the proposed specification version. Only the outcome owner can. Agreeing is the hand-off: it writes the outcome-spec/v1 document for the builder (outcome-spec-<id>).",
       "Agreed to",
       withId.extend({
         version: z.coerce.number().int().min(1).describe(
           "The version being agreed to.",
         ),
       }),
-      (s, who, a) => s.agree(who, a.id, a.version),
+      async (s, who, a, context, store) => {
+        const { stored, document } = await s.agree(who, a.id, a.version);
+        store.add(
+          await context.writeResource(
+            "outcomeSpec",
+            `outcome-spec-${stored.request.id}`,
+            { ...document },
+          ),
+        );
+        return stored;
+      },
     ),
     revise: change(
       "Start a new specification version after agreement.",
@@ -728,7 +757,7 @@ export const model = {
 
     export_outcome_spec: {
       description:
-        "Export an agreed request as outcome-spec/v1 (or Markdown). The request moves to Exported.",
+        "Export an agreed request again as outcome-spec/v1 (or Markdown). Agreeing already wrote the outcome spec; this records another export and leaves the request agreed.",
       arguments: withId.extend({
         format: z.enum(EXPORT_FORMATS).default("outcome-spec/v1+json").describe(
           "The document's format.",

@@ -13,6 +13,7 @@ export type AllowedAction =
   | Action
   | "editDetails"
   | "editSpecification"
+  | "export"
   | "message"
   | "invite"
   | "join";
@@ -48,6 +49,10 @@ export function allowedActions(
     (request.status === "draft" || request.status === "discussing")
   ) {
     allowed.push("editSpecification");
+  }
+  // Exporting again leaves the request agreed, so it isn't a transition.
+  if (can(role, "export") && request.status === "agreed") {
+    allowed.push("export");
   }
   if (open && can(role, "message")) allowed.push("message");
   if (open && can(role, "invite")) allowed.push("invite");
