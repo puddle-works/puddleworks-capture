@@ -3,17 +3,27 @@
 // workflows that read them see the same fields.
 import {
   allowedActions,
+  type BuildResultRecord,
+  currentBuild,
+  exampleChecks,
   latestAgreed,
   latestSpecification,
   openQuestions,
   type Person,
+  registryUrl,
+  releaseProblems,
   type Request,
   roleOf,
   specificationProblems,
 } from "../domain/index.ts";
 import type { Stored } from "./ports.ts";
 import { specificationEtag } from "./services.ts";
-import type { PersonRef, WebRequest, WebSummary } from "./view_types.ts";
+import type {
+  PersonRef,
+  WebBuildResult,
+  WebRequest,
+  WebSummary,
+} from "./view_types.ts";
 
 function nameOf(request: Request, userId: string): string {
   // Someone who has left keeps their id on the record; their name went with them.
@@ -81,9 +91,25 @@ export function toWebSummary({ request, before, number }: Stored): WebSummary {
   };
 }
 
+function webBuildResult(
+  request: Request,
+  record: BuildResultRecord,
+): WebBuildResult {
+  return {
+    ...record,
+    recordedByName: nameOf(request, record.recordedBy),
+    registryUrl: record.result.published
+      ? registryUrl(record.result.extension)
+      : null,
+    examples: exampleChecks(request, record.result),
+    releaseProblems: releaseProblems(request, record),
+  };
+}
+
 /** Everything on the request except what the viewer has no use for: idempotency keys and the legacy record. */
 export function toWebRequest(stored: Stored): WebRequest {
   const { request } = stored;
+  const current = currentBuild(request);
   return {
     ...toWebSummary(stored),
     initialDescription: request.initialDescription,
@@ -107,6 +133,8 @@ export function toWebRequest(stored: Stored): WebRequest {
       ...e,
       exportedByName: nameOf(request, e.exportedBy),
     })),
+    build: current ? webBuildResult(request, current) : null,
+    buildResults: request.buildResults.map((b) => webBuildResult(request, b)),
     transitions: request.transitions.map((t) => ({
       ...t,
       byName: nameOf(request, t.by),

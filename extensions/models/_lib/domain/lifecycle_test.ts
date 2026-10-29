@@ -31,8 +31,13 @@ describe("transition table", () => {
       TRANSITIONS[a].from.map((f) => `${f} -${a}-> ${TRANSITIONS[a].to}`)
     ).sort();
     expect(edges).toEqual([
+      "agreed -build-> building",
+      "agreed -release-> released",
       "agreed -revise-> discussing",
       "agreed -withdraw-> withdrawn",
+      "building -release-> released",
+      "building -revise-> discussing",
+      "building -withdraw-> withdrawn",
       "discussing -decline-> declined",
       "discussing -propose-> ready_for_agreement",
       "discussing -withdraw-> withdrawn",
@@ -42,6 +47,8 @@ describe("transition table", () => {
       "ready_for_agreement -decline-> declined",
       "ready_for_agreement -requestChanges-> discussing",
       "ready_for_agreement -withdraw-> withdrawn",
+      "released -build-> building",
+      "released -revise-> discussing",
     ]);
   });
 

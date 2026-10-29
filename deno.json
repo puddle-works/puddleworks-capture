@@ -26,7 +26,8 @@
   },
   "exclude": [
     "web/dist/",
-    ".swamp/"
+    ".swamp/",
+    "factory/"
   ],
   "fmt": {
     "exclude": [
@@ -34,7 +35,8 @@
       "AGENTS.md",
       ".claude/",
       ".swamp/",
-      "vaults/"
+      "vaults/",
+      "factory/"
     ]
   }
 }

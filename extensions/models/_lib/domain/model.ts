@@ -1,10 +1,13 @@
 import { z } from "npm:zod@4.6.5";
+import type { BuildResultV1 } from "./build_result_v1.ts";
 
 export const REQUEST_STATUSES = [
   "draft",
   "discussing",
   "ready_for_agreement",
   "agreed",
+  "building",
+  "released",
   "withdrawn",
   "declined",
 ] as const;
@@ -147,6 +150,23 @@ export interface ExportRecord {
   exportedAt: string;
 }
 
+/** A build result as it was recorded, against the agreed version it built. */
+export interface BuildResultRecord {
+  specVersion: number;
+  recordedBy: string;
+  recordedAt: string;
+  result: BuildResultV1;
+}
+
+/** How one example in the agreed recipe came out in a build. */
+export interface ExampleCheck {
+  phrase: string;
+  /** It is the request's requested phrase. */
+  requested: boolean;
+  outcome: "passed" | "failed" | "missing";
+  detail: string | null;
+}
+
 export interface Transition {
   from: RequestStatus;
   to: RequestStatus;
@@ -178,6 +198,7 @@ export interface Request {
   specifications: SpecificationVersion[];
   agreements: Agreement[];
   exports: ExportRecord[];
+  buildResults: BuildResultRecord[];
   transitions: Transition[];
   createdAt: string;
   updatedAt: string;

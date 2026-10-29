@@ -8,11 +8,13 @@ import {
 } from "./lifecycle.ts";
 import type { Person, Request } from "./model.ts";
 import { can, canRead, roleOf } from "./permissions.ts";
+import { BUILT_FROM_AGREED } from "./specification.ts";
 
 export type AllowedAction =
   | Action
   | "editDetails"
   | "editSpecification"
+  | "recordBuildResult"
   | "export"
   | "message"
   | "invite"
@@ -32,6 +34,8 @@ export function allowedActions(
   if (!role) return open && person.isBuilder ? ["join"] : [];
 
   const allowed: AllowedAction[] = ACTIONS.filter((action) => {
+    // Recording a build result takes these, so they aren't offered alone.
+    if (action === "build" || action === "release") return false;
     if (action === "agree" && openQuestions(request).length > 0) return false;
     try {
       checkTransition(request, person, action);
@@ -50,10 +54,12 @@ export function allowedActions(
   ) {
     allowed.push("editSpecification");
   }
-  // Exporting again leaves the request agreed, so it isn't a transition.
-  if (can(role, "export") && request.status === "agreed") {
-    allowed.push("export");
+  const built = BUILT_FROM_AGREED.includes(request.status);
+  if (can(role, "recordBuildResult") && built) {
+    allowed.push("recordBuildResult");
   }
+  // Exporting leaves the status as it is, so it isn't a transition.
+  if (can(role, "export") && built) allowed.push("export");
   if (open && can(role, "message")) allowed.push("message");
   if (open && can(role, "invite")) allowed.push("invite");
   return allowed;

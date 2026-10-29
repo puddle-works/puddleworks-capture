@@ -96,7 +96,7 @@ describe("allowed actions", () => {
     expect(allowedActions(r, reviewer)).toEqual(["requestChanges", "message"]);
   });
 
-  it("offers export and revise once agreed", () => {
+  it("offers export, revise and recording a build result once agreed", () => {
     expect(
       allowedActions(
         recordExport(agreedRequest(), owner, "markdown", T1),
@@ -104,6 +104,7 @@ describe("allowed actions", () => {
       ),
     ).toEqual([
       "revise",
+      "recordBuildResult",
       "export",
       "message",
       "invite",

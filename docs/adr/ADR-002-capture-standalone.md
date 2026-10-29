@@ -45,7 +45,9 @@ Distribution:
   the server, per request, by role (outcome owner, builder, observer).
 - **Out of Capture:** triage, matching, claiming, delivery assessment,
   development, acceptance, delivery, publication review, value measurement
-  (dropped for now), build plans, build results, GitHub-issue intake.
+  (dropped for now), build plans, build results, GitHub-issue intake. (Later,
+  [ADR-004](ADR-004-build-results.md) brought build results in: they move a
+  request to Building, then Released.)
 - **Distribution:** an optional "Browse existing apps" link from
   `DISTRIBUTION_URL`, hidden when unset. Nothing else.
 - **Migration:** the swamp extension and `puddleworks-ui` keep running until
