@@ -1,5 +1,6 @@
 import {
   agree,
+  type BuildResultV1,
   createRequest,
   editSpecification,
   type Person,
@@ -114,4 +115,39 @@ export function readyRequest(): Request {
 
 export function agreedRequest(): Request {
   return agree(readyRequest(), owner, { version: 1, specHash: "hash-v1" }, T2);
+}
+
+/** A build result for agreedRequest's version 1, before the PR or release. */
+export function buildResult(
+  overrides: Partial<BuildResultV1> = {},
+): BuildResultV1 {
+  return {
+    apiVersion: "puddleworks.dev/build-result/v1",
+    kind: "BuildResult",
+    name: "stock-counts",
+    extension: "@example/stock-counts",
+    entryPointRef: "@example/stock-counts",
+    repository: "https://github.com/example/stock-counts",
+    buildRef: "draft/stock-counts",
+    source: {
+      url: "http://127.0.0.1:3002/requests/r-1",
+      version: 1,
+      specHash: "hash-v1",
+    },
+    builtAt: "2026-10-23T10:00:00.000Z",
+    ...overrides,
+  };
+}
+
+/** Published, with goodSpec's one example passing. */
+export function releasingResult(
+  overrides: Partial<BuildResultV1> = {},
+): BuildResultV1 {
+  return buildResult({
+    pullRequest: "https://github.com/example/stock-counts/pull/1",
+    published: { version: "2026.10.23.1", visibility: "public" },
+    examples: [{ phrase: "what should I order this week", passed: true }],
+    builtAt: "2026-10-23T12:00:00.000Z",
+    ...overrides,
+  });
 }

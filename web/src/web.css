@@ -418,6 +418,30 @@ main .problems p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.build-facts {
+  margin: 10px 0 16px;
+}
+.build-facts > div {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.build-facts > div:last-child {
+  border-bottom: none;
+}
+.build-facts dt {
+  flex: none;
+  width: 96px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.build-facts dd {
+  overflow-wrap: anywhere;
+}
+.examples dt .badge {
+  margin-left: 6px;
+}
 .requested-phrase {
   color: var(--color-accent);
 }

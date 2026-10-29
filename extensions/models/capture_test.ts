@@ -1,7 +1,7 @@
 // The requests behavior end to end against a fake swamp: arguments as the CLI
 // sends them, data written by instance name, and errors in plain words.
 import { describe, expect, it } from "./_lib/domain/test_bdd.ts";
-import { goodSpec } from "./_lib/domain/test_fixtures.ts";
+import { goodSpec, releasingResult } from "./_lib/domain/test_fixtures.ts";
 import { FakeSwamp } from "./_lib/capture/fake_swamp.ts";
 import { model } from "./capture.ts";
 
@@ -474,6 +474,103 @@ describe("@puddleworks/capture/requests", () => {
     };
     expect(after.participants).toHaveLength(1);
     expect(after.messages[0].resolvedAt === null).toBe(false);
+  });
+
+  it("records build results from a file or inline JSON, building then released", async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const swamp = new FakeSwamp();
+      const context = swamp.context(model.globalArguments.parse({}), dir);
+      const run = async (
+        method: MethodName,
+        input: Record<string, unknown> = {},
+      ) => {
+        const m = model.methods[method];
+        // deno-lint-ignore no-explicit-any
+        const out = await (m.execute as any)(m.arguments.parse(input), context);
+        swamp.checkHandles(out.dataHandles);
+        return out as { dataHandles: { name: string }[] };
+      };
+      await people(run);
+      const created = await run("create_request", {
+        as: "olive@example.com",
+        title: "Stock counts",
+        description: "",
+      });
+      const id = String(swamp.data(created.dataHandles[0].name)!.id);
+      const olive = { as: "olive@example.com", id };
+      const bea = { as: "bea@example.com", id };
+      await run("submit", olive);
+      await run("join_request", bea);
+      await run("edit_specification", { ...bea, specification: goodSpec });
+      await run("propose", bea);
+      await run("agree", { ...olive, version: "1" });
+      const agreed = swamp.data(`request-${id}`)!;
+      const source = {
+        url: `http://127.0.0.1:3002/requests/${id}`,
+        version: 1,
+        specHash: (agreed.agreements as { specHash: string }[])[0].specHash,
+      };
+      const building = releasingResult({ source, published: undefined });
+      await Deno.writeTextFile(
+        `${dir}/build-result.json`,
+        JSON.stringify(building),
+      );
+      const first = await run("record_build_result", {
+        as: "bea@example.com",
+        result: "build-result.json",
+      });
+      expect(first.dataHandles.map((h) => h.name)).toEqual([`request-${id}`]);
+      expect(swamp.data(`request-${id}`)).toMatchObject({ status: "building" });
+      expect(swamp.logs.at(-1)).toBe(
+        `Recorded a build result for request #1 (${id}): now building, version 7`,
+      );
+      await run("record_build_result", {
+        as: "bea@example.com",
+        result: JSON.stringify(releasingResult({ source })),
+      });
+      expect(swamp.data(`request-${id}`)).toMatchObject({
+        status: "released",
+        version: 8,
+      });
+      // The same result again changes nothing, but still hands back the request.
+      const again = await run("record_build_result", {
+        as: "bea@example.com",
+        result: JSON.stringify(releasingResult({ source })),
+      });
+      expect(again.dataHandles.map((h) => h.name)).toEqual([`request-${id}`]);
+      expect(swamp.data(`request-${id}`)).toMatchObject({ version: 8 });
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  });
+
+  it("says why a published build isn't released yet", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    await run("submit", { id });
+    await run("edit_specification", { id, specification: goodSpec });
+    await run("propose", { id });
+    await run("agree", { id, version: "1" });
+    const agreed = swamp.data(`request-${id}`)!;
+    await run("record_build_result", {
+      result: releasingResult({
+        source: {
+          url: `http://127.0.0.1:3002/requests/${id}`,
+          version: 1,
+          specHash: (agreed.agreements as { specHash: string }[])[0].specHash,
+        },
+        examples: [],
+      }),
+    });
+    expect(swamp.logs.at(-1)).toBe(
+      `Not released yet: The example "what should I order this week" wasn't reported.`,
+    );
   });
 
   it("exports a snapshot file, and won't write over one", async () => {

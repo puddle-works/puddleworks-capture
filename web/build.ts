@@ -27,6 +27,7 @@ const ASSETS_MODULE = new URL("web/assets.ts", LIB);
 export const LIB_INPUTS = [
   "capture/ports.ts",
   "capture/view_types.ts",
+  "domain/build_result_v1.ts",
   "domain/model.ts",
 ];
 

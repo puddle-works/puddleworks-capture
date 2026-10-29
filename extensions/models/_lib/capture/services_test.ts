@@ -2,7 +2,7 @@
 // what each one saves.
 import { describe, expect, it } from "../domain/test_bdd.ts";
 import { DomainError } from "../domain/index.ts";
-import { goodSpec } from "../domain/test_fixtures.ts";
+import { goodSpec, releasingResult } from "../domain/test_fixtures.ts";
 import { MemoryStore } from "./memory_store.ts";
 import { createServices } from "./services.ts";
 import type { Snapshot } from "./snapshot.ts";
@@ -523,5 +523,111 @@ describe("export", () => {
     expect(again.created).toBe(false);
     expect(again.stored.request.id).toBe(stored.request.id);
     expect(again.stored.number).toBe(1);
+  });
+});
+
+describe("build results", () => {
+  async function agreed() {
+    const { store, services } = await setup();
+    const { stored } = await services.create(OLIVE, draft);
+    const id = stored.request.id;
+    await services.submit(OLIVE, id);
+    await services.join(BEA, id);
+    await services.editSpecification(BEA, id, {
+      content: goodSpec,
+      basedOnMessageIds: [],
+    }, null);
+    await services.propose(BEA, id);
+    const { stored: done } = await services.agree(OLIVE, id, 1);
+    const result = releasingResult({
+      source: {
+        url: `http://127.0.0.1:3002/requests/${id}`,
+        version: 1,
+        specHash: done.request.agreements[0].specHash,
+      },
+    });
+    return { store, services, id, result };
+  }
+
+  it("records a result against the request its source names, and releases it", async () => {
+    const { services, id, result } = await agreed();
+    const stored = await services.recordBuildResult(BEA, result);
+    expect(stored.request.id).toBe(id);
+    expect(stored.request.status).toBe("released");
+    expect(stored.request.buildResults[0].result).toEqual(result);
+  });
+
+  it("saves nothing when the same result is recorded again", async () => {
+    const { store, services, result } = await agreed();
+    await services.recordBuildResult(BEA, result);
+    const saves = store.saves;
+    const again = await services.recordBuildResult(BEA, result);
+    expect(store.saves).toBe(saves);
+    expect(again.request.buildResults).toHaveLength(1);
+  });
+
+  it("refuses a result that isn't a build-result/v1, saying what is wrong", async () => {
+    const { services } = await agreed();
+    await expect.rejects(
+      services.recordBuildResult(BEA, { apiVersion: "x" }),
+      expect.objectContaining({
+        code: "invalid_input",
+        message: expect.stringContaining(
+          'That isn\'t a build-result/v1: apiVersion must be "puddleworks.dev/build-result/v1".',
+        ),
+      }),
+    );
+  });
+
+  it("refuses a result with no source, or one for another Capture", async () => {
+    const { services, result } = await agreed();
+    const { source: _, ...noSource } = result;
+    await expect.rejects(
+      services.recordBuildResult(BEA, noSource),
+      expect.objectContaining({
+        code: "invalid_input",
+        message:
+          "The build result has no source, so Capture can't tell which request it was built for.",
+      }),
+    );
+    await expect.rejects(
+      services.recordBuildResult(BEA, {
+        ...result,
+        source: { ...result.source, url: "https://elsewhere.example/r/1" },
+      }),
+      expect.objectContaining({
+        code: "invalid_input",
+        message:
+          "The build result is for https://elsewhere.example/r/1, which isn't a request here: requests here are at http://127.0.0.1:3002/requests/<id>.",
+      }),
+    );
+  });
+
+  it("answers a request someone can't see as missing", async () => {
+    const { services, result } = await agreed();
+    await expect.rejects(
+      services.recordBuildResult(CAL, result),
+      expect.objectContaining({ code: "not_found" }),
+    );
+  });
+
+  it("keeps the build results through a snapshot", async () => {
+    const { services, id, result } = await agreed();
+    await services.recordBuildResult(BEA, result);
+    const file = JSON.parse(
+      JSON.stringify(await services.exportSnapshot()),
+    ) as Snapshot;
+    const store = new MemoryStore();
+    const to = createServices({
+      store,
+      clock: () => "2026-10-28T09:00:00.000Z",
+      newId: () => "new",
+      appUrl: "http://127.0.0.1:3002",
+    });
+    await to.importSnapshot(file);
+    expect(store.requests.get(id)?.request).toMatchObject({
+      status: "released",
+      buildResults: [{ result }],
+    });
   });
 });

@@ -60,6 +60,7 @@ export function createRequest(
       : [],
     agreements: [],
     exports: [],
+    buildResults: [],
     transitions: [],
     createdAt: at,
     updatedAt: at,

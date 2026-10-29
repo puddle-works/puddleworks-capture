@@ -1,5 +1,5 @@
 // One request with everything on it: details, people, discussion, the
-// specification and its versions, agreements, exports and history.
+// specification and its versions, agreements, exports, builds and history.
 import { useEffect, useState } from "preact/hooks";
 import type { Message } from "../../extensions/models/_lib/domain/model.ts";
 import type {
@@ -22,6 +22,7 @@ import {
 } from "./words.ts";
 
 type Spec = WebRequest["specifications"][number];
+type Build = WebRequest["buildResults"][number];
 
 export function RequestPage({ id, changes }: { id: string; changes: number }) {
   const [request, setRequest] = useState<WebRequest | null>(null);
@@ -92,6 +93,7 @@ function Request({ request: r }: { request: WebRequest }) {
       <People request={r} />
       <Discussion request={r} />
       <Specifications request={r} />
+      {r.buildResults.length > 0 && <Builds request={r} />}
       <History request={r} />
       {r.before && <Before before={r.before} />}
     </>
@@ -349,6 +351,130 @@ function List({ title, items }: { title: string; items: string[] }) {
         ? <p class="empty">None.</p>
         : <ul>{items.map((i, n) => <li key={n}>{i}</li>)}</ul>}
     </>
+  );
+}
+
+const CHECK: Record<Build["examples"][number]["outcome"], [string, string]> = {
+  passed: ["Passed", "delivered"],
+  failed: ["Failed", "closed"],
+  missing: ["Not reported", "review"],
+};
+
+/** The build that stands for the agreed version, then every one recorded. */
+function Builds({ request }: { request: WebRequest }) {
+  const { build } = request;
+  return (
+    <section aria-labelledby="build-heading">
+      <h2 id="build-heading">Build</h2>
+      {build
+        ? <BuildView build={build} released={request.status === "released"} />
+        : (
+          <p class="empty">
+            Nothing built from the version agreed now yet.
+          </p>
+        )}
+      <h3>Build results</h3>
+      <ul class="agreements">
+        {request.buildResults.map((b) => (
+          <li key={`${b.recordedAt}-${b.result.builtAt}`}>
+            Version {b.specVersion}, built {formatTime(b.result.builtAt)} on
+            {" "}
+            <code>{b.result.buildRef}</code>
+            {b.result.published && ` · published ${b.result.published.version}`}
+            {" "}
+            · recorded by {b.recordedByName}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function BuildView({ build, released }: { build: Build; released: boolean }) {
+  const { result } = build;
+  return (
+    <div class="spec">
+      <p class="spec-version">
+        {result.extension} · built from version {build.specVersion}
+      </p>
+      <p class="card-meta">
+        Built {formatTime(result.builtAt)} · recorded by {build.recordedByName}
+        {" "}
+        {formatTime(build.recordedAt)}
+      </p>
+      {!released && build.releaseProblems.length > 0 && (
+        <div class="problems">
+          <p>Before it is released:</p>
+          <ul>{build.releaseProblems.map((p) => <li key={p}>{p}</li>)}</ul>
+        </div>
+      )}
+      <dl class="build-facts">
+        <div>
+          <dt>Source</dt>
+          <dd>
+            <a href={result.repository}>{result.repository}</a>
+            {result.path && (
+              <>
+                at <code>{result.path}</code>
+              </>
+            )}, on <code>{result.buildRef}</code>
+          </dd>
+        </div>
+        <div>
+          <dt>Pull request</dt>
+          {result.pullRequest
+            ? (
+              <dd>
+                <a href={result.pullRequest}>{result.pullRequest}</a>
+              </dd>
+            )
+            : <dd class="empty">None yet.</dd>}
+        </div>
+        <div>
+          <dt>Published</dt>
+          {result.published
+            ? (
+              <dd>
+                {result.published.version}, {result.published.visibility}
+                {build.registryUrl && (
+                  <>
+                    {" "}· <a href={build.registryUrl}>{result.extension}</a>
+                  </>
+                )}
+              </dd>
+            )
+            : <dd class="empty">Not yet.</dd>}
+        </div>
+        <div>
+          <dt>Run with</dt>
+          <dd>
+            <code>{result.entryPointRef}</code>
+          </dd>
+        </div>
+      </dl>
+      <h3>Examples</h3>
+      {build.examples.length === 0
+        ? <p class="empty">The agreed spec has no recipe examples.</p>
+        : (
+          <dl class="examples">
+            {build.examples.map((e) => {
+              const [label, badge] = CHECK[e.outcome];
+              return (
+                <div key={e.phrase}>
+                  <dt>
+                    “{e.phrase}”{" "}
+                    <span class={`badge badge-${badge}`}>{label}</span>
+                    {e.requested && (
+                      <span class="badge badge-draft">Requested</span>
+                    )}
+                  </dt>
+                  {e.detail && <dd>{e.detail}</dd>}
+                </div>
+              );
+            })}
+          </dl>
+        )}
+    </div>
   );
 }
 

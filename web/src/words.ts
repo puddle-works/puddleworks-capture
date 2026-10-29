@@ -16,6 +16,8 @@ export const STATUS: Record<RequestStatus, string> = {
   discussing: "Being discussed",
   ready_for_agreement: "Ready for agreement",
   agreed: "Agreed",
+  building: "Building",
+  released: "Released",
   withdrawn: "Withdrawn",
   declined: "Declined",
 };
@@ -26,6 +28,8 @@ export const STATUS_GROUPS: [RequestStatus, string][] = [
   ["discussing", "Being discussed"],
   ["ready_for_agreement", "Ready for agreement"],
   ["agreed", "Agreed"],
+  ["building", "Building"],
+  ["released", "Released"],
   ["withdrawn", "Withdrawn"],
   ["declined", "Declined"],
 ];
@@ -51,6 +55,8 @@ const BADGE: Record<RequestStatus, string> = {
   discussing: "active",
   ready_for_agreement: "review",
   agreed: "delivered",
+  building: "active",
+  released: "delivered",
   withdrawn: "closed",
   declined: "closed",
 };
@@ -145,6 +151,8 @@ const ACTION: Record<string, string> = {
   revise: "Reopened to revise",
   withdraw: "Request withdrawn",
   decline: "Request declined",
+  build: "Building",
+  release: "Released",
   import: "Imported",
 };
 
@@ -165,6 +173,16 @@ export function historyEntries(request: WebRequest): HistoryEntry[] {
       label = agreement
         ? `Agreed to version ${agreement.specVersion}`
         : "Agreed";
+    }
+    if (t.action === "build" || t.action === "release") {
+      // Recording the build result made the change, at the same moment.
+      const b = request.buildResults.findLast((b) => b.recordedAt === t.at);
+      if (b && t.action === "build") {
+        label = `Building from ${b.result.buildRef}`;
+      }
+      if (b?.result.published && t.action === "release") {
+        label = `Released ${b.result.extension} ${b.result.published.version}`;
+      }
     }
     if (t.action === "export") {
       const exported = request.exports.find((e) => e.exportedAt === t.at);

@@ -1,11 +1,17 @@
 // What the methods write and what the viewer is sent.
 import { describe, expect, it } from "../domain/test_bdd.ts";
-import { postMessage, removeParticipant } from "../domain/index.ts";
+import {
+  postMessage,
+  recordBuildResult,
+  removeParticipant,
+} from "../domain/index.ts";
 import {
   agreedRequest,
   builder,
+  buildResult,
   draftRequest,
   owner,
+  releasingResult,
   stranger,
   T2,
 } from "../domain/test_fixtures.ts";
@@ -138,5 +144,51 @@ describe("viewer views", () => {
       imported: true,
       specificationVersion: null,
     });
+  });
+});
+
+describe("build results on the page", () => {
+  it("link a released request to its source and its registry page", () => {
+    let r = recordBuildResult(agreedRequest(), builder, buildResult(), T2);
+    r = recordBuildResult(r, builder, releasingResult(), T2);
+    const view = toWebRequest(stored(r));
+    expect(view.status).toBe("released");
+    expect(view.build).toMatchObject({
+      specVersion: 1,
+      recordedByName: builder.name,
+      registryUrl: "https://swamp-club.com/extensions/@example/stock-counts",
+      result: {
+        repository: "https://github.com/example/stock-counts",
+        pullRequest: "https://github.com/example/stock-counts/pull/1",
+        published: { version: "2026.10.23.1", visibility: "public" },
+      },
+      examples: [{
+        phrase: "what should I order this week",
+        outcome: "passed",
+      }],
+      releaseProblems: [],
+    });
+    expect(view.buildResults.map((b) => b.registryUrl)).toEqual([
+      null,
+      "https://swamp-club.com/extensions/@example/stock-counts",
+    ]);
+  });
+
+  it("say why a published build isn't released", () => {
+    const r = recordBuildResult(
+      agreedRequest(),
+      builder,
+      releasingResult({ examples: [] }),
+      T2,
+    );
+    expect(toWebRequest(stored(r)).build?.releaseProblems).toEqual([
+      'The example "what should I order this week" wasn\'t reported.',
+    ]);
+  });
+
+  it("show no build before one is recorded", () => {
+    const view = toWebRequest(stored());
+    expect(view.build).toBe(null);
+    expect(view.buildResults).toEqual([]);
   });
 });

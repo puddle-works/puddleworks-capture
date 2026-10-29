@@ -1,6 +1,8 @@
 // What the viewer page is sent. Types only, shared by the server and the page
 // (web/src), so the two can't drift apart.
 import type {
+  BuildResultRecord,
+  ExampleCheck,
   ExportRecord,
   Message,
   Participant,
@@ -35,6 +37,16 @@ export interface WebSummary {
   updatedAt: string;
 }
 
+/** A recorded build result, with how its examples came out. */
+export interface WebBuildResult extends BuildResultRecord {
+  recordedByName: string;
+  /** The extension's registry page, once it is published. */
+  registryUrl: string | null;
+  examples: ExampleCheck[];
+  /** What stops it being the release; empty when it is. */
+  releaseProblems: string[];
+}
+
 /** One request with everything on it. */
 export interface WebRequest extends WebSummary {
   initialDescription: string;
@@ -53,6 +65,10 @@ export interface WebRequest extends WebSummary {
     specHash: string;
   }[];
   exports: (ExportRecord & { exportedByName: string })[];
+  /** The build that stands for the agreed version, or null before one. */
+  build: WebBuildResult | null;
+  /** Every build result recorded, oldest first. */
+  buildResults: WebBuildResult[];
   transitions: (Transition & { byName: string })[];
   before: OldHistory | null;
 }

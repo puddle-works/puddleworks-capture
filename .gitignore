@@ -25,3 +25,6 @@ vaults/
 
 # The viewer page's build scratch (web/build.ts embeds it in assets.ts)
 web/dist/
+
+# The Factory, checked out by CI for the build-result/v1 contract test
+/factory

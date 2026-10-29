@@ -5,6 +5,7 @@ import {
   type ExportFormat,
   type Person,
   type Request,
+  type RequestStatus,
   type SpecificationContent,
   SpecificationContentSchema,
   type SpecificationVersion,
@@ -64,6 +65,13 @@ export function latestSpecification(
 ): SpecificationVersion | undefined {
   return request.specifications.at(-1);
 }
+
+/** The statuses with an agreed version standing, to export or build from. */
+export const BUILT_FROM_AGREED: readonly RequestStatus[] = [
+  "agreed",
+  "building",
+  "released",
+];
 
 export function latestAgreed(
   request: Request,
@@ -246,12 +254,12 @@ export function recordExport(
   at: string,
 ): Request {
   requirePermission(request, actor, "export");
-  if (request.status !== "agreed") {
+  if (!BUILT_FROM_AGREED.includes(request.status)) {
     throw new DomainError(
       "invalid_state",
       `Can't export a request that is ${
         statusWords(request.status)
-      }; it must be agreed.`,
+      }; it must be agreed, building or released.`,
     );
   }
   const agreed = latestAgreed(request)!;

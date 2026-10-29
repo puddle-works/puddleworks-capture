@@ -17,10 +17,12 @@ import {
   type Message,
   type NewRequest,
   type OutcomeSpecV1,
+  parseBuildResult,
   type Participant,
   type Person,
   postMessage,
   propose,
+  recordBuildResult,
   recordExport,
   recordReview,
   removeParticipant,
@@ -64,6 +66,7 @@ const OPEN: readonly RequestStatus[] = [
   "discussing",
   "ready_for_agreement",
   "agreed",
+  "building",
 ];
 
 /** The specification's ETag: changes whenever the current version is edited or moves on. */
@@ -457,6 +460,42 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         stored,
         document: format === "markdown" ? toMarkdown(doc) : doc,
       };
+    },
+
+    /**
+     * Records a build-result/v1 against the request its `source.url` names,
+     * which is the page the outcome spec gave. `raw` is the parsed JSON.
+     */
+    async recordBuildResult(as: string, raw: unknown): Promise<Stored> {
+      const parsed = parseBuildResult(raw);
+      if (!parsed.ok) {
+        throw new DomainError(
+          "invalid_input",
+          `That isn't a build-result/v1: ${parsed.problems.join(" ")}`,
+        );
+      }
+      const { result } = parsed;
+      if (!result.source) {
+        throw new DomainError(
+          "invalid_input",
+          "The build result has no source, so Capture can't tell which request it was built for.",
+        );
+      }
+      const pages = `${appUrl}/requests/`;
+      const id = result.source.url.startsWith(pages)
+        ? result.source.url.slice(pages.length)
+        : "";
+      if (!/^[^/?#]+$/.test(id)) {
+        throw new DomainError(
+          "invalid_input",
+          `The build result is for ${result.source.url}, which isn't a request here: requests here are at ${pages}<id>.`,
+        );
+      }
+      return await mutate(
+        as,
+        id,
+        (r, p, at) => recordBuildResult(r, p, result, at),
+      );
     },
 
     /**

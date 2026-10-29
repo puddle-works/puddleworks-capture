@@ -6,10 +6,16 @@ import {
 } from "../../extensions/models/_lib/domain/test_bdd.ts";
 import {
   agreedRequest,
+  builder,
+  buildResult,
   owner,
+  releasingResult,
   T2,
 } from "../../extensions/models/_lib/domain/test_fixtures.ts";
-import { recordExport } from "../../extensions/models/_lib/domain/index.ts";
+import {
+  recordBuildResult,
+  recordExport,
+} from "../../extensions/models/_lib/domain/index.ts";
 import { toWebRequest } from "../../extensions/models/_lib/capture/views.ts";
 import {
   badgeClass,
@@ -20,6 +26,7 @@ import {
   RECENT_PER_STAGE,
   routeOf,
   splitRecent,
+  STATUS_GROUPS,
 } from "./words.ts";
 
 describe("routeOf", () => {
@@ -138,6 +145,60 @@ describe("historyEntries", () => {
     expect(labels.filter((l) => l.startsWith("Exported"))).toEqual([
       "Exported as Markdown (version 1)",
     ]);
+  });
+});
+
+describe("history of a build", () => {
+  it("says when building started and what was released", () => {
+    let request = recordBuildResult(
+      agreedRequest(),
+      builder,
+      buildResult(),
+      "2026-10-23T13:00:00.000Z",
+    );
+    request = recordBuildResult(
+      request,
+      builder,
+      releasingResult(),
+      "2026-10-23T14:00:00.000Z",
+    );
+    const view = toWebRequest({
+      request,
+      version: 6,
+      idempotencyKeys: [],
+      before: null,
+      legacy: null,
+      number: 1,
+    });
+    expect(historyEntries(view).slice(-2)).toEqual([
+      {
+        label: "Building from draft/stock-counts",
+        by: "Bea Builder",
+        at: "2026-10-23T13:00:00.000Z",
+        note: null,
+      },
+      {
+        label: "Released @example/stock-counts 2026.10.23.1",
+        by: "Bea Builder",
+        at: "2026-10-23T14:00:00.000Z",
+        note: null,
+      },
+    ]);
+  });
+
+  it("lists building and released after agreed, with their own badges", () => {
+    expect(STATUS_GROUPS.map(([s]) => s)).toEqual([
+      "draft",
+      "discussing",
+      "ready_for_agreement",
+      "agreed",
+      "building",
+      "released",
+      "withdrawn",
+      "declined",
+    ]);
+    expect(badgeClass("building")).toBe("badge badge-active");
+    expect(badgeClass("released")).toBe("badge badge-delivered");
   });
 });
 

@@ -13,7 +13,8 @@ export type Permission =
   | "withdraw"
   | "decline"
   | "export"
-  | "revise";
+  | "revise"
+  | "recordBuildResult";
 
 const GRANTS: Record<Role, readonly Permission[]> = {
   outcome_owner: [
@@ -28,6 +29,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "withdraw",
     "export",
     "revise",
+    "recordBuildResult",
   ],
   // A builder may invite builders and reviewers only; inviteParticipant checks that.
   builder: [
@@ -40,6 +42,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "decline",
     "export",
     "revise",
+    "recordBuildResult",
   ],
   observer: [],
   // Reviews the spec while it is frozen for agreement; changes nothing in it.
@@ -80,6 +83,7 @@ const PERMISSION_WORDS: Record<Permission, string> = {
   decline: "decline the request",
   export: "export the specification",
   revise: "revise the specification",
+  recordBuildResult: "record a build result",
 };
 
 const ROLE_WORDS: Record<Role, string> = {

@@ -15,6 +15,8 @@ export const ACTIONS = [
   "revise",
   "withdraw",
   "decline",
+  "build",
+  "release",
 ] as const;
 export type Action = (typeof ACTIONS)[number];
 
@@ -26,12 +28,15 @@ export const TRANSITIONS: Record<
   propose: { from: ["discussing"], to: "ready_for_agreement" },
   requestChanges: { from: ["ready_for_agreement"], to: "discussing" },
   agree: { from: ["ready_for_agreement"], to: "agreed" },
-  revise: { from: ["agreed"], to: "discussing" },
+  revise: { from: ["agreed", "building", "released"], to: "discussing" },
   withdraw: {
-    from: ["draft", "discussing", "ready_for_agreement", "agreed"],
+    from: ["draft", "discussing", "ready_for_agreement", "agreed", "building"],
     to: "withdrawn",
   },
   decline: { from: ["discussing", "ready_for_agreement"], to: "declined" },
+  // Recording a build result takes these; see build.ts.
+  build: { from: ["agreed", "released"], to: "building" },
+  release: { from: ["agreed", "building"], to: "released" },
 };
 
 const PERMISSION_FOR: Record<Action, Permission | null> = {
@@ -42,6 +47,8 @@ const PERMISSION_FOR: Record<Action, Permission | null> = {
   revise: "revise",
   withdraw: "withdraw",
   decline: "decline",
+  build: "recordBuildResult",
+  release: "recordBuildResult",
 };
 
 const ACTION_WORDS: Record<Action, string> = {
@@ -52,18 +59,21 @@ const ACTION_WORDS: Record<Action, string> = {
   revise: "revise",
   withdraw: "withdraw",
   decline: "decline",
+  build: "start building",
+  release: "release",
 };
 
 /**
  * A request as an older Capture saved it, brought up to date. Exporting once
  * moved an agreed request to `exported`; agreeing is now the hand-off, so
  * `exported` reads as `agreed`, in the status and in the history. Its exports
- * stay as they were.
+ * stay as they were. One saved before build results has none.
  */
 export function upgradeRequest(request: Request): Request {
   const was = (s: string) => (s === "exported" ? "agreed" : s) as RequestStatus;
   const old = (s: string) => s === "exported";
   if (
+    request.buildResults &&
     !old(request.status) &&
     !request.transitions.some((t) => old(t.from) || old(t.to))
   ) {
@@ -71,6 +81,7 @@ export function upgradeRequest(request: Request): Request {
   }
   return {
     ...request,
+    buildResults: request.buildResults ?? [],
     status: was(request.status),
     transitions: request.transitions.map((t) => ({
       ...t,

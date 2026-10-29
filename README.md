@@ -1,16 +1,18 @@
 # puddleworks-capture
 
 Captures requirements: takes a request, discusses it, agrees the outcome and
-exports a spec. It stops there.
+exports a spec. It doesn't build anything, but it records what a factory built
+from the spec and when that was released.
 
 One of three separate Puddleworks applications: Capture, Factory and
 Distribution. Each runs alone and can be swapped out. They share no code, only
 versioned file contracts. See [ADR-001](docs/adr/ADR-001-three-separate-apps.md)
 and the epic puddle-works/puddleworks#207.
 
-| Takes in  | Puts out                  |
-| --------- | ------------------------- |
-| a request | an `outcome-spec/v1` file |
+| Takes in                              | Puts out                  |
+| ------------------------------------- | ------------------------- |
+| a request                             | an `outcome-spec/v1` file |
+| a `build-result/v1` file from a build | Building, then Released   |
 
 Capture is the swamp extension `@puddleworks/capture`
 ([ADR-003](docs/adr/ADR-003-capture-swamp-extension.md)): requests and people
@@ -55,12 +57,12 @@ swamp behavior run viewer serve --input port=3002   # until Ctrl-C; open http://
 Every method acts as one person in the people list: `--input as=<email>`, or the
 behavior's `defaultAs` when `as` is left out. Their role on the request decides
 what they may do, as before: the outcome owner submits, agrees, withdraws and
-exports; builders join open requests and write the specification; reviewers ask
-questions and ask for changes; observers read. Agreeing waits until every
-question is resolved. Agreeing is the hand-off: it writes the agreed version as
-an `outcomeSpec` document (`outcome-spec-<id>`) for the builder, and the request
-stays Agreed. There is no sign-in, so anyone who can run swamp in the repository
-can act as anyone on the list.
+exports; builders join open requests, write the specification and record what
+they built; reviewers ask questions and ask for changes; observers read.
+Agreeing waits until every question is resolved. Agreeing is the hand-off: it
+writes the agreed version as an `outcomeSpec` document (`outcome-spec-<id>`) for
+the builder, and the request stays Agreed. There is no sign-in, so anyone who
+can run swamp in the repository can act as anyone on the list.
 
 ```bash
 swamp behavior run capture create_request --input title="Weekly stock counts" \
@@ -107,6 +109,44 @@ request. Reads (`get_request`, `list_requests`) write what they found as `view`
 and `requestList` data; `agree` writes `outcomeSpec`, and `export_outcome_spec`
 writes it again, or `outcomeSpecMarkdown`, recording the export without moving
 the request on. A request an older Capture saved as Exported reads as Agreed.
+
+### Record what was built
+
+Agreed means ready to build. A factory builds from the outcome spec and writes a
+[`build-result/v1`](https://github.com/puddle-works/puddleworks-factory/blob/main/docs/contracts/build-result.md)
+file. `record_build_result` records it against the request its `source.url`
+names (`<appUrl>/requests/<id>`, the page the outcome spec gave), so it takes no
+`id`:
+
+```bash
+swamp behavior run capture record_build_result --input as=bea@example.com \
+  --input result=builds/stock-counts.build-result.json
+```
+
+`result` is a file path relative to the repository, an https URL, JSON text or,
+from a workflow, an object. The outcome owner or a builder may record one. Its
+`source.version` and `source.specHash` must be the agreed version's, so a build
+of something else is refused.
+
+| Status   | When                                                                                                                         |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Building | The first result is recorded, or a newer one isn't released                                                                  |
+| Released | The latest build is published, and every example in the agreed recipe is reported as passed, the requested phrase among them |
+
+The latest build is the one built last (`builtAt`), whatever order the results
+come in. Released is decided by the result's optional
+`examples: [{ phrase, passed, detail? }]`, which says how the built recipe
+answered each phrase. A phrase the result leaves out counts as not passed, and a
+spec agreed before recipes has no examples, so it can't be released until it is
+revised. While a published build isn't released, the method's log says why.
+Recording the same result again changes nothing.
+
+From Building or Released the request can be revised, as from Agreed; once the
+new version is agreed, it waits for a build of that. A Building request can be
+withdrawn; a Released one can't. The page shows the latest build: the
+repository, branch and pull request, the published version and its registry page
+(`https://swamp-club.com/extensions/<extension>`), and how each example came
+out. See [ADR-004](docs/adr/ADR-004-build-results.md).
 
 ### Log requests from a program
 

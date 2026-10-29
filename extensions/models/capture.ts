@@ -5,7 +5,9 @@
  * Each method acts as one person in the people list, named by `as` (an
  * email) or the behavior's `defaultAs`, and Capture's rules decide what that
  * person may do: the outcome owner submits and agrees, builders join and
- * write the specification, observers read.
+ * write the specification, observers read. Once it is agreed,
+ * record_build_result records what a build of it produced: Building, then
+ * Released once it is published and every recipe example passed.
  *
  * Output:
  * - `request`: one request and everything on it (`request-<id>`), a new
@@ -25,8 +27,10 @@
  */
 import { z } from "npm:zod@4.6.5";
 import {
+  currentBuild,
   DomainError,
   EXPORT_FORMATS,
+  releaseProblems,
   REQUEST_STATUSES,
   REVIEW_VERDICTS,
   ROLES,
@@ -34,6 +38,7 @@ import {
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
 import type { Snapshot } from "./_lib/capture/snapshot.ts";
+import { readBuildResultInput } from "./_lib/capture/build_result_input.ts";
 import type { Stored } from "./_lib/capture/ports.ts";
 import { type StoreContext, SwampStore } from "./_lib/capture/swamp_store.ts";
 import { toRequestView, toSummary } from "./_lib/capture/views.ts";
@@ -176,7 +181,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.28.4",
+  version: "2026.10.29.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -226,6 +231,12 @@ export const model = {
       toVersion: "2026.10.28.4",
       description:
         "Agreeing writes the outcome spec; no Exported status; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.10.29.1",
+      description:
+        "record_build_result; Building and Released statuses; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -802,6 +813,53 @@ export const model = {
             id,
             format: args.format,
           });
+        }),
+    },
+
+    record_build_result: {
+      description:
+        "Record a build-result/v1 against the request its source.url names. The first moves an agreed request to building; it is released once the latest build is published and every example in the agreed recipe passed. The same result twice changes nothing.",
+      arguments: z.object({
+        as,
+        result: z.union([
+          z.string().min(1),
+          z.record(z.string(), z.unknown()),
+        ]).describe(
+          "The build result: a file path relative to the repository, an https URL, JSON text, or an object.",
+        ),
+      }),
+      execute: (
+        args: { as?: string; result: string | Record<string, unknown> },
+        context: CaptureContext,
+      ) =>
+        run(context, async (services, store) => {
+          const raw = await readBuildResultInput(args.result, {
+            repoDir: context.repoDir,
+            fetch: (url) => globalThis.fetch(url),
+          });
+          const stored = await services.recordBuildResult(
+            actingAs(args, context),
+            raw,
+          );
+          // The same result again saves nothing; write it so a step reading
+          // the output still gets the request, as create_request does.
+          if (!store.wrote(stored.request.id)) await store.saveRequest(stored);
+          const { request } = stored;
+          context.logger.info(
+            "Recorded a build result for request #{number} ({id}): now {status}, version {version}",
+            {
+              number: stored.number,
+              id: request.id,
+              status: request.status,
+              version: stored.version,
+            },
+          );
+          const current = currentBuild(request);
+          if (request.status !== "released" && current?.result.published) {
+            context.logger.info("Not released yet: {problems}", {
+              problems: releaseProblems(request, current).join(" "),
+            });
+          }
         }),
     },
 
