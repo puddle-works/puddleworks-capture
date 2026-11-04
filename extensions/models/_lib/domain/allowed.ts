@@ -8,6 +8,7 @@ import {
 } from "./lifecycle.ts";
 import type { Person, Request } from "./model.ts";
 import { can, canRead, roleOf } from "./permissions.ts";
+import { canEditDetails } from "./request.ts";
 import { BUILT_FROM_AGREED } from "./specification.ts";
 
 export type AllowedAction =
@@ -45,7 +46,7 @@ export function allowedActions(
       throw e;
     }
   });
-  if (role === "outcome_owner" && request.status === "draft") {
+  if (role === "outcome_owner" && canEditDetails(request)) {
     allowed.push("editDetails");
   }
   if (

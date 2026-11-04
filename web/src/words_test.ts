@@ -8,11 +8,13 @@ import {
   agreedRequest,
   builder,
   buildResult,
+  discussingRequest,
   owner,
   releasingResult,
   T2,
 } from "../../extensions/models/_lib/domain/test_fixtures.ts";
 import {
+  editDetails,
   recordBuildResult,
   recordExport,
 } from "../../extensions/models/_lib/domain/index.ts";
@@ -95,6 +97,26 @@ describe("historyEntries", () => {
       number: 1,
     });
     expect(historyEntries(view)[1].label).toBe("Imported");
+  });
+
+  it("says when the details changed after submitting, and how", () => {
+    const request = editDetails(discussingRequest(), owner, {
+      title: "Friday stock count",
+    }, T2);
+    const view = toWebRequest({
+      request,
+      version: 2,
+      idempotencyKeys: [],
+      before: null,
+      legacy: null,
+      number: 1,
+    });
+    expect(historyEntries(view).at(-1)).toEqual({
+      label: "Details changed",
+      by: "Olive Owner",
+      at: T2,
+      note: 'Title was "Stock counts".',
+    });
   });
 
   it("shows each export at its time, as exports no longer change the status", () => {

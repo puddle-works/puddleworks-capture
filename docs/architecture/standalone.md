@@ -311,7 +311,7 @@ GET    /api/v1/openapi.json             this API, described
 GET    /api/v1/requests?scope=&status=&cursor=&limit=  mine, or (builders) available to join
 POST   /api/v1/requests                             create draft (Idempotency-Key honoured)
 GET    /api/v1/requests/{id}
-PATCH  /api/v1/requests/{id}                        title/description while Draft
+PATCH  /api/v1/requests/{id}                        title/description while Draft or Discussing
 POST   /api/v1/requests/{id}/submit | withdraw | propose | request-changes | revise | join | decline
 
 GET    /api/v1/requests/{id}/participants
