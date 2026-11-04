@@ -5,7 +5,6 @@ import {
   inviteParticipant,
   postMessage,
   recordExport,
-  submit,
 } from "./index.ts";
 import {
   agreedRequest,
@@ -33,11 +32,55 @@ describe("editing the request's own details", () => {
     });
   });
 
-  it("refuses once submitted, from anyone else, and an empty title", () => {
-    expect(() =>
-      editDetails(submit(draftRequest(), owner, T1), owner, { title: "x" }, T1)
-    )
-      .toThrowError(expect.objectContaining({ code: "invalid_state" }));
+  it("keeps the fields it isn't given", () => {
+    const r = editDetails(draftRequest(), owner, { title: "Friday" }, T1);
+    expect(r.currentProcess).toBe("Paper sheet, then a spreadsheet.");
+  });
+
+  it("records nothing in the history while it is a draft", () => {
+    const r = editDetails(draftRequest(), owner, { title: "Friday" }, T1);
+    expect(r.transitions).toEqual([]);
+  });
+
+  it("lets the outcome owner change them while it is being discussed", () => {
+    const r = editDetails(discussingRequest(), owner, {
+      title: "Friday stock count",
+      initialDescription: "We count stock every Friday night.",
+    }, T1);
+    expect(r).toMatchObject({
+      status: "discussing",
+      title: "Friday stock count",
+      initialDescription: "We count stock every Friday night.",
+      updatedAt: T1,
+    });
+    expect(r.transitions.at(-1)).toEqual({
+      from: "discussing",
+      to: "discussing",
+      action: "editDetails",
+      by: owner.userId,
+      at: T1,
+      note: 'Title was "Stock counts". The description changed.',
+    });
+  });
+
+  it("records only what actually changed once submitted", () => {
+    const before = discussingRequest();
+    const same = editDetails(before, owner, { title: "Stock counts" }, T1);
+    expect(same.transitions).toEqual(before.transitions);
+    const r = editDetails(before, owner, { currentProcess: "Paper" }, T1);
+    expect(r.transitions.at(-1)?.note).toBe("The current process changed.");
+  });
+
+  it("refuses once a specification is up for agreement or agreed", () => {
+    for (const r of [readyRequest(), agreedRequest()]) {
+      expect(() => editDetails(r, owner, { title: "x" }, T1))
+        .toThrowError(expect.objectContaining({ code: "invalid_state" }));
+    }
+  });
+
+  it("refuses from anyone else, and an empty title", () => {
+    expect(() => editDetails(discussingRequest(), builder, { title: "x" }, T1))
+      .toThrowError(expect.objectContaining({ code: "not_allowed" }));
     expect(() => editDetails(draftRequest(), stranger, { title: "x" }, T1))
       .toThrowError(expect.objectContaining({ code: "not_allowed" }));
     expect(() => editDetails(draftRequest(), owner, { title: "  " }, T1))
@@ -53,6 +96,14 @@ describe("allowed actions", () => {
       "editDetails",
       "editSpecification",
     ]);
+  });
+
+  it("offers the outcome owner editing the details while discussing", () => {
+    expect(allowedActions(discussingRequest(), owner)).toContain("editDetails");
+    expect(allowedActions(readyRequest(), owner)).not.toContain("editDetails");
+    expect(allowedActions(discussingRequest(), builder)).not.toContain(
+      "editDetails",
+    );
   });
 
   it("says what a builder can do while discussing", () => {

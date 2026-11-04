@@ -80,7 +80,18 @@ const DetailsSchema = NewRequestSchema.pick({
   currentProcess: true,
 }).partial();
 
-/** The outcome owner changes the title, description or current process while it is still a draft. */
+/** While the details can change: the same states as the specification. */
+const DETAILS_EDITABLE: readonly Request["status"][] = ["draft", "discussing"];
+
+export function canEditDetails(request: Request): boolean {
+  return DETAILS_EDITABLE.includes(request.status);
+}
+
+/**
+ * The outcome owner changes the title, description or current process while
+ * the request is a draft or being discussed. Once submitted, each change is
+ * recorded in the history, saying what changed.
+ */
 export function editDetails(
   request: Request,
   actor: Person,
@@ -96,10 +107,10 @@ export function editDetails(
       "Only the outcome owner can change the request's details.",
     );
   }
-  if (request.status !== "draft") {
+  if (!canEditDetails(request)) {
     throw new DomainError(
       "invalid_state",
-      "The details can only be changed before the request is submitted.",
+      "The details can only be changed while the request is a draft or being discussed.",
     );
   }
   const parsed = DetailsSchema.safeParse(details);
@@ -109,10 +120,38 @@ export function editDetails(
       parsed.error.issues.map((i) => i.message).join(" "),
     );
   }
+  // Only the fields given: the schema's defaults would blank the others.
   const changes = Object.fromEntries(
-    Object.entries(parsed.data).filter(([, v]) => v !== undefined),
+    Object.entries(parsed.data).filter(([k]) =>
+      details[k as keyof RequestDetails] !== undefined
+    ),
   );
-  return { ...request, ...changes, updatedAt: at };
+  const changed = { ...request, ...changes, updatedAt: at };
+  const note = detailsNote(request, changed);
+  if (request.status === "draft" || note === null) return changed;
+  return {
+    ...changed,
+    transitions: [...request.transitions, {
+      from: request.status,
+      to: request.status,
+      action: "editDetails",
+      by: actor.userId,
+      at,
+      note,
+    }],
+  };
+}
+
+/** What changed between two versions of the details, or null for nothing. */
+function detailsNote(before: Request, after: Request): string | null {
+  const notes = [
+    before.title !== after.title && `Title was "${before.title}".`,
+    before.initialDescription !== after.initialDescription &&
+    "The description changed.",
+    before.currentProcess !== after.currentProcess &&
+    "The current process changed.",
+  ].filter((n) => n !== false);
+  return notes.length > 0 ? notes.join(" ") : null;
 }
 
 export function submit(request: Request, actor: Person, at: string): Request {

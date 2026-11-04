@@ -154,9 +154,10 @@ const ACTION: Record<string, string> = {
   build: "Building",
   release: "Released",
   import: "Imported",
+  editDetails: "Details changed",
 };
 
-/** Every state change, who made it and when, after the request was raised. */
+/** Every state change or change to the details, who made it and when, after the request was raised. */
 export function historyEntries(request: WebRequest): HistoryEntry[] {
   const raised: HistoryEntry = {
     label: "Raised",

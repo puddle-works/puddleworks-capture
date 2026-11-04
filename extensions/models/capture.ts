@@ -181,7 +181,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.10.29.1",
+  version: "2026.11.04.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -237,6 +237,12 @@ export const model = {
       toVersion: "2026.10.29.1",
       description:
         "record_build_result; Building and Released statuses; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.04.1",
+      description:
+        "edit_details works while discussing and is recorded in the history; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -564,7 +570,7 @@ export const model = {
     ),
 
     edit_details: change(
-      "Change a request's title, description or current process. Only its outcome owner can.",
+      "Change a request's title, description or current process while it is a draft or being discussed. Only its outcome owner can; once submitted, each change shows in its history.",
       "Edited the details of",
       withId.extend({
         title: z.string().min(1).max(200).optional().describe("The new title."),
