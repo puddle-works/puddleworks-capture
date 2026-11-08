@@ -13,6 +13,7 @@ and the epic puddle-works/puddleworks#207.
 | ------------------------------------- | ------------------------- |
 | a request                             | an `outcome-spec/v1` file |
 | a `build-result/v1` file from a build | Building, then Released   |
+| a builder starting work               | Building                  |
 
 Capture is the swamp extension `@puddleworks/capture`
 ([ADR-003](docs/adr/ADR-003-capture-swamp-extension.md)): requests and people
@@ -130,8 +131,20 @@ version's, so a build of something else is refused.
 
 | Status   | When                                                                                                                         |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Building | The first result is recorded, or a newer one isn't released                                                                  |
+| Building | Work is started, the first result is recorded, or a newer one isn't released                                                 |
 | Released | The latest build is published, and every example in the agreed recipe is reported as passed, the requested phrase among them |
+
+When work starts, before there is any result, a builder on the request can mark
+it Building:
+
+```bash
+swamp behavior run capture start_building --input as=bea@example.com --input id=1
+```
+
+It works only while the request is Agreed, and the outcome owner can't do it.
+Results recorded after that keep it Building until one is released. A factory
+that never calls it is unaffected: its first result moves the request to
+Building, or straight to Released.
 
 The latest build is the one built last (`builtAt`), whatever order the results
 come in. Released is decided by the result's optional
@@ -146,7 +159,8 @@ new version is agreed, it waits for a build of that. A Building request can be
 withdrawn; a Released one can't. The page shows the latest build: the
 repository, branch and pull request, the published version and its registry page
 (`https://swamp-club.com/extensions/<extension>`), and how each example came
-out. See [ADR-004](docs/adr/ADR-004-build-results.md).
+out. See [ADR-004](docs/adr/ADR-004-build-results.md) and
+[ADR-005](docs/adr/ADR-005-start-building.md).
 
 ### Log requests from a program
 

@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.11.04.1"
+version: "2026.11.08.1"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
@@ -9,7 +9,7 @@ description: |
   specification has a recipe: the phrases it must answer and
   what each answer shows. A build-result/v1 from the factory moves the
   request to Building, and to Released once it is published and every
-  example passed. Everything is kept in swamp data.
+  example passed; a builder can mark it Building earlier, when work starts. Everything is kept in swamp data.
 
   ## Models
 
@@ -17,7 +17,7 @@ description: |
     a method for each step: create_request (safe to retry with an
     idempotency key), submit, invite, join_request, post_message,
     edit_specification, propose, record_review, agree, export_outcome_spec,
-    record_build_result and more. Each request has a number (#1, #2, …) that methods take in
+    start_building, record_build_result and more. Each request has a number (#1, #2, …) that methods take in
     place of its id. Each change says who is acting with `as`, and Capture's
     rules decide what they may do.
   - `@puddleworks/capture/web`: a read-only page on 127.0.0.1 showing every

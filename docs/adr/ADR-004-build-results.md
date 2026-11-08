@@ -2,6 +2,9 @@
 
 ## Status: Accepted (2026-10-29)
 
+Amended by [ADR-005](ADR-005-start-building.md): `start_building` also moves an
+agreed request to Building, before any result.
+
 Changes one line of [ADR-002](ADR-002-capture-standalone.md), which put build
 results out of Capture. Agreeing is still the hand-off; this adds what comes
 back.
