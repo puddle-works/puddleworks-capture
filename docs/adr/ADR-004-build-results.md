@@ -38,10 +38,11 @@ Those are what decide whether a build is done.
 - **Released needs passing examples.** The build must be published, and its
   optional `examples: [{ phrase, passed, detail? }]` must report every example
   in the agreed recipe as passed, the requested phrase among them. This field is
-  an addition to build-result/v1 the Factory hasn't written yet
-  (puddle-works/puddleworks-factory#45); until it does, a build stays Building
-  and the log names the examples not reported. A spec agreed before recipes has
-  no examples, so it is revised before it can be released.
+  an addition to build-result/v1. The Factory has written it since
+  puddle-works/puddleworks-factory#45 closed on 2026-11-05, and its example
+  result has it. A result without it stays Building, and the log names the
+  examples not reported. A spec agreed before recipes has no examples, so it is
+  revised before it can be released.
 - **Neither status is the end.** A newer build that isn't released takes a
   Released request back to Building. Revise works from Building or Released, as
   from Agreed, and the results recorded stay on the request. Building can be
@@ -69,8 +70,11 @@ Those are what decide whether a build is done.
 **Trade-offs:**
 
 - The examples are what the build reports about itself; Capture doesn't run the
-  recipe. That is the same trust `as` already asks for
-- Nothing is released until the Factory writes `examples`
+  recipe. That is the same trust `as` already asks for. The Factory's come from
+  its readiness check, which shows a phrase reaches the app, not that the answer
+  is right, unless the builder passes outcomes they checked
+- Nothing is released from a result without `examples`, such as one from a
+  factory that doesn't write them
 - Capture's copy of the contract can fall behind the Factory's. The contract
   test catches a change that breaks reading the Factory's example, not a new
   field Capture ignores

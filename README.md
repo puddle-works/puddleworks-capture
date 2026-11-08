@@ -123,10 +123,10 @@ swamp behavior run capture record_build_result --input as=bea@example.com \
   --input result=builds/stock-counts.build-result.json
 ```
 
-`result` is a file path relative to the repository, an https URL, JSON text or,
-from a workflow, an object. The outcome owner or a builder may record one. Its
-`source.version` and `source.specHash` must be the agreed version's, so a build
-of something else is refused.
+`result` is a file path, relative to the repository or in full, an https URL,
+JSON text or, from a workflow, an object. The outcome owner or a builder may
+record one. Its `source.version` and `source.specHash` must be the agreed
+version's, so a build of something else is refused.
 
 | Status   | When                                                                                                                         |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
