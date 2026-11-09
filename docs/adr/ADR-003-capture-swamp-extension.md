@@ -8,6 +8,23 @@ and `packages/` were deleted (2026-10-27).
 Supersedes [ADR-002](ADR-002-capture-standalone.md). The domain, lifecycle and
 `outcome-spec/v1` hand-off it chose stay as they are.
 
+### Note (2026-11-09): the live record is in the desk
+
+Capture's live data, the people list and every request, lives in a dedicated
+swamp repository used only to run Puddleworks, the desk (`puddleworks-desk`). It
+holds released extensions only: Capture, puddlerouter, recipe packs and the
+extensions built from requests, each installed from the registry. Neither
+development repository, this one or puddlerouter's, holds the live record; any
+Capture data in them is for trying changes.
+
+The record moves between repositories with `export_snapshot` and `import`
+(2026.10.28.2), as in the README's "Move Capture to another repository".
+
+Programs that log requests, such as puddlerouter's `raise`, run in the desk too,
+so "a workflow in the same repository" below still holds: the router logs with
+`@puddleworks/capture-log-request` in the repository it runs in, which is the
+desk.
+
 ## Context
 
 ADR-002 made Capture a Node product: a Hono API, a React web app, Better Auth

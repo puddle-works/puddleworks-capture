@@ -15,6 +15,7 @@ export type AllowedAction =
   | Action
   | "editDetails"
   | "editSpecification"
+  | "startBuilding"
   | "recordBuildResult"
   | "export"
   | "message"
@@ -35,7 +36,8 @@ export function allowedActions(
   if (!role) return open && person.isBuilder ? ["join"] : [];
 
   const allowed: AllowedAction[] = ACTIONS.filter((action) => {
-    // Recording a build result takes these, so they aren't offered alone.
+    // Starting to build, or recording a build result, takes these, so they
+    // aren't offered as plain transitions.
     if (action === "build" || action === "release") return false;
     if (action === "agree" && openQuestions(request).length > 0) return false;
     try {
@@ -54,6 +56,9 @@ export function allowedActions(
     (request.status === "draft" || request.status === "discussing")
   ) {
     allowed.push("editSpecification");
+  }
+  if (can(role, "startBuilding") && request.status === "agreed") {
+    allowed.push("startBuilding");
   }
   const built = BUILT_FROM_AGREED.includes(request.status);
   if (can(role, "recordBuildResult") && built) {

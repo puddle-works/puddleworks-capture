@@ -6,10 +6,6 @@
     "test": "deno test --allow-read --allow-write --allow-net=127.0.0.1 extensions/models/ web/ tests/",
     "build:web": "deno run --allow-read=. --allow-write=web/dist,extensions/models/_lib/web/assets.ts --allow-run=deno web/build.ts && deno fmt extensions/models/_lib/web/assets.ts"
   },
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "preact"
-  },
   "lint": {
     "rules": {
       "exclude": [

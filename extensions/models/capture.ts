@@ -6,8 +6,9 @@
  * email) or the behavior's `defaultAs`, and Capture's rules decide what that
  * person may do: the outcome owner submits and agrees, builders join and
  * write the specification, observers read. Once it is agreed,
- * record_build_result records what a build of it produced: Building, then
- * Released once it is published and every recipe example passed.
+ * start_building marks it Building when work starts, and record_build_result
+ * records what a build of it produced: Building, then Released once it is
+ * published and every recipe example passed.
  *
  * Output:
  * - `request`: one request and everything on it (`request-<id>`), a new
@@ -181,7 +182,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.04.1",
+  version: "2026.11.09.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -243,6 +244,18 @@ export const model = {
       toVersion: "2026.11.04.1",
       description:
         "edit_details works while discussing and is recorded in the history; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.08.1",
+      description:
+        "start_building marks an agreed request as Building before any build result; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.09.1",
+      description:
+        "Released with the page's Building text; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -634,6 +647,12 @@ export const model = {
       withId,
       (s, who, a) => s.revise(who, a.id),
     ),
+    start_building: change(
+      "Mark an agreed request as Building, when work on it starts and before any build result. Only a builder can. Build results recorded after that keep it Building until one is released.",
+      "Started building",
+      withId,
+      (s, who, a) => s.startBuilding(who, a.id),
+    ),
     withdraw: change(
       "Withdraw a request. Only its outcome owner can.",
       "Withdrew",
@@ -649,6 +668,16 @@ export const model = {
         ),
       }),
       (s, who, a) => s.decline(who, a.id, a.reason),
+    ),
+    close_as_duplicate: change(
+      "Close a request that repeats another, such as a need a tool logged again. Its outcome owner or a builder can, while it is a draft or still open. The other request must not be closed, and counts it as asked again.",
+      "Closed as a duplicate",
+      withId.extend({
+        of: z.string().trim().min(1).describe(
+          "The request this one repeats: its number (12 or #12) or its id.",
+        ),
+      }),
+      (s, who, a) => s.closeAsDuplicate(who, a.id, a.of),
     ),
 
     invite: change(
@@ -824,7 +853,7 @@ export const model = {
 
     record_build_result: {
       description:
-        "Record a build-result/v1 against the request its source.url names. The first moves an agreed request to building; it is released once the latest build is published and every example in the agreed recipe passed. The same result twice changes nothing.",
+        "Record a build-result/v1 against the request its source.url names. The first moves an agreed request to building, unless start_building already did; it is released once the latest build is published and every example in the agreed recipe passed. The same result twice changes nothing.",
       arguments: z.object({
         as,
         result: z.union([

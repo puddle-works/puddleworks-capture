@@ -10,11 +10,13 @@ export const REQUEST_STATUSES = [
   "released",
   "withdrawn",
   "declined",
+  "duplicate",
 ] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 export const TERMINAL_STATUSES: readonly RequestStatus[] = [
   "withdrawn",
   "declined",
+  "duplicate",
 ];
 
 export const ROLES = [
@@ -224,6 +226,8 @@ export interface Request {
   outcomeOwnerId: string;
   status: RequestStatus;
   closedReason: string | null;
+  /** The id of the request this one repeats, once closed as its duplicate. */
+  duplicateOf?: string;
   participants: Participant[];
   messages: Message[];
   specifications: SpecificationVersion[];
