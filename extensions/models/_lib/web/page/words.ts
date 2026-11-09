@@ -15,6 +15,13 @@ export const STATUS: Record<RequestStatus, string> = {
   duplicate: "Duplicate",
 };
 
+/** What the Build section says while no build stands for the agreed version. */
+export function noBuildYet(status: RequestStatus): string {
+  return status === "building"
+    ? "Work has started. No build result has been recorded yet."
+    : "Nothing built from the version agreed now yet.";
+}
+
 /** How a group of the list is ordered. */
 type Order = "oldest" | "newest" | "highestNumber";
 

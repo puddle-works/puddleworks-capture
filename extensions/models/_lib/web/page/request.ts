@@ -9,6 +9,7 @@ import {
   FORMAT,
   formatTime,
   historyEntries,
+  noBuildYet,
   numbered,
   pieceLabels,
   plural,
@@ -103,7 +104,8 @@ function Request({ request: r }: {
     h(People, { request: r }),
     h(Discussion, { request: r }),
     h(Specifications, { request: r }),
-    r.buildResults.length > 0 && h(Builds, { request: r }),
+    (r.buildResults.length > 0 || r.status === "building") &&
+      h(Builds, { request: r }),
     h(History, { request: r }),
     r.before && h(Before, { before: r.before }),
   );
@@ -451,10 +453,10 @@ function Builds({ request }: {
       : h(
         "p",
         { class: "empty" },
-        "Nothing built from the version agreed now yet.",
+        noBuildYet(request.status),
       ),
-    h("h3", null, "Build results"),
-    h(
+    request.buildResults.length > 0 && h("h3", null, "Build results"),
+    request.buildResults.length > 0 && h(
       "ul",
       { class: "agreements" },
       request.buildResults.map((b) =>
