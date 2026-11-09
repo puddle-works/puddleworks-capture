@@ -345,12 +345,14 @@ deno fmt --check
 swamp extension fmt manifest.yaml --check
 ```
 
-`extensions/models/_lib/web/page/` is the page: Preact components the server
-renders to HTML. `web/src/` holds its shell, styles, icon and a small script
-(opening "Show all", and reading the page again when the data changes), built by
-`web/build.ts` into `extensions/models/_lib/web/assets.ts`. A test fails while
-that file is older than its source. The domain rules are in
-`extensions/models/_lib/domain/`, pure TypeScript with no I/O.
+`extensions/models/_lib/web/page/` is the page: Preact components, written with
+`h()` in `.ts`, that the server renders to HTML
+([ADR-006](docs/adr/ADR-006-preact-on-the-server.md)). `web/src/` holds its
+shell, styles, icon and a small script (opening "Show all", and reading the page
+again when the data changes), built by `web/build.ts` into
+`extensions/models/_lib/web/assets.ts`. A test fails while that file is older
+than its source. The domain rules are in `extensions/models/_lib/domain/`, pure
+TypeScript with no I/O.
 
 To try the extension from this checkout without publishing, in another swamp
 repository: `swamp extension source add <path to this checkout>`.
