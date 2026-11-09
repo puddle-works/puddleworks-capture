@@ -5,6 +5,7 @@ import type {
   ExportFormat,
   Recipe,
   Role,
+  SpecificationContent,
 } from "../../extensions/models/_lib/domain/model.ts";
 import type {
   RequestStatus,
@@ -113,6 +114,51 @@ const SHAPE: Record<Recipe["pieces"][number]["shape"], string> = {
 /** The pieces a recipe takes from the phrase, as "weeks (a number)". */
 export function pieceLabels(pieces: Recipe["pieces"]): string[] {
   return pieces.map((p) => `${p.name} (${SHAPE[p.shape]})`);
+}
+
+/** One part of a spec that changed between two versions: the lines it lost and gained. */
+export interface SpecChange {
+  section: string;
+  removed: string[];
+  added: string[];
+}
+
+/** Each part of a spec as lines, under the heading the page gives it. */
+function specLines(c: SpecificationContent): [string, string[]][] {
+  const text = (t: string) => (t.trim() ? [t] : []);
+  return [
+    ["Problem statement", text(c.problemStatement)],
+    ["Desired outcome", text(c.desiredOutcome)],
+    ["In scope", c.scope.in],
+    ["Out of scope", c.scope.out],
+    ["Constraints", c.constraints],
+    ["Assumptions", c.assumptions],
+    [
+      "Acceptance criteria",
+      c.acceptanceCriteria.map((a) => `${a.id} ${a.text}`),
+    ],
+    [
+      "Recipe",
+      (c.recipe?.examples ?? []).map((e) => `“${e.phrase}”: ${e.answer}`),
+    ],
+    ["When there is nothing to show", text(c.recipe?.whenEmpty ?? "")],
+    ["Taken from the phrase", pieceLabels(c.recipe?.pieces ?? [])],
+    ["Extensions to start from", c.recipe?.candidateExtensions ?? []],
+  ];
+}
+
+/** What changed from `before` to `after`, part by part; parts that didn't change are left out. */
+export function specChanges(
+  before: SpecificationContent,
+  after: SpecificationContent,
+): SpecChange[] {
+  const old = new Map(specLines(before));
+  return specLines(after).flatMap(([section, lines]) => {
+    const was = old.get(section) ?? [];
+    const removed = was.filter((l) => !lines.includes(l));
+    const added = lines.filter((l) => !was.includes(l));
+    return removed.length || added.length ? [{ section, removed, added }] : [];
+  });
 }
 
 /** "ready_for_agreement" → "ready for agreement" */

@@ -110,6 +110,34 @@ and `requestList` data; `agree` writes `outcomeSpec`, and `export_outcome_spec`
 writes it again, or `outcomeSpecMarkdown`, recording the export without moving
 the request on. A request an older Capture saved as Exported reads as Agreed.
 
+### Revise an agreed spec, with a reason
+
+When a builder learns that an agreed spec needs to change, they can upload the
+revised spec to the same request, with a short reason, for the outcome owner to
+agree. `revise_specification` does it in one step: it revises the request if it
+is agreed, building or released, saves the next version with the reason as its
+`changeSummary`, and proposes it. The outcome owner or a builder may run it.
+
+```bash
+swamp behavior run capture revise_specification --input as=bea@example.com \
+  --input id=12 --input outcomeSpec=specs/stock-counts.outcome-spec.json \
+  --input reason="The owner now wants counts from the second stockroom too."
+```
+
+Give the spec as `outcomeSpec`, an edited `outcome-spec/v1` file for this
+request (a path, https URL, JSON text or object; only its `specification` is
+used, and its `request.id` must be this request's), or as `specification`, as
+`edit_specification` takes it. `basedOnVersion` is the version the change starts
+from, and defaults to the file's `specification.version`; if a newer version
+exists it is refused, so a change made to an old copy isn't proposed over a
+newer one. If the spec isn't ready or questions are open, the proposal is
+refused and nothing changes.
+
+The reason shows on the version, next to its agreement and in the history, with
+what changed from the version before. Once agreed, the outcome spec carries it
+as the optional `specification.changeSummary`, and the Markdown says it under
+the title.
+
 ### Record what was built
 
 Agreed means ready to build. A factory builds from the outcome spec and writes a

@@ -17,6 +17,7 @@ import {
   pieceLabels,
   plural,
   ROLE,
+  specChanges,
   STATUS,
   words,
 } from "./words.ts";
@@ -190,21 +191,26 @@ function Specifications({ request }: { request: WebRequest }) {
     <section aria-labelledby="spec-heading">
       <h2 id="spec-heading">Specification</h2>
       {latest
-        ? <Version spec={latest} />
+        ? <Version spec={latest} versions={versions} />
         : <p class="empty">No specification yet.</p>}
       {request.agreements.length > 0 && (
         <>
           <h3>Agreements</h3>
           <ul class="agreements">
-            {request.agreements.map((a) => (
-              <li key={`${a.specVersion}-${a.agreedAt}`}>
-                Version {a.specVersion} agreed by {a.agreedBy.name} ·{" "}
-                {formatTime(a.agreedAt)}{" "}
-                <code title="SHA-256 of the agreed content">
-                  {a.specHash.slice(0, 12)}
-                </code>
-              </li>
-            ))}
+            {request.agreements.map((a) => {
+              const why = versions.find((v) => v.version === a.specVersion)
+                ?.changeSummary;
+              return (
+                <li key={`${a.specVersion}-${a.agreedAt}`}>
+                  Version {a.specVersion} agreed by {a.agreedBy.name} ·{" "}
+                  {formatTime(a.agreedAt)}{" "}
+                  <code title="SHA-256 of the agreed content">
+                    {a.specHash.slice(0, 12)}
+                  </code>
+                  {why && <div class="card-meta">Why it changed: {why}</div>}
+                </li>
+              );
+            })}
           </ul>
         </>
       )}
@@ -242,7 +248,7 @@ function Specifications({ request }: { request: WebRequest }) {
           </ul>
           {older && (
             <div class="older-version">
-              <Version spec={older} />
+              <Version spec={older} versions={versions} />
             </div>
           )}
         </>
@@ -251,8 +257,9 @@ function Specifications({ request }: { request: WebRequest }) {
   );
 }
 
-function Version({ spec }: { spec: Spec }) {
+function Version({ spec, versions }: { spec: Spec; versions: Spec[] }) {
   const { content } = spec;
+  const previous = versions.find((v) => v.version === spec.version - 1);
   return (
     <div class="spec">
       <p class="spec-version">Version {spec.version} · {words(spec.status)}</p>
@@ -260,6 +267,13 @@ function Version({ spec }: { spec: Spec }) {
         Started by {spec.createdByName} · last saved{" "}
         {formatTime(spec.updatedAt)}
       </p>
+      {spec.changeSummary && (
+        <Changed
+          why={spec.changeSummary}
+          from={previous}
+          to={spec}
+        />
+      )}
       {spec.status === "draft" && spec.problems.length > 0 && (
         <div class="problems">
           <p>Before it can be proposed:</p>
@@ -294,6 +308,42 @@ function Version({ spec }: { spec: Spec }) {
           from the discussion.
         </p>
       )}
+    </div>
+  );
+}
+
+/** Why a version changed, and what changed from the one before. */
+function Changed(
+  { why, from, to }: { why: string; from: Spec | undefined; to: Spec },
+) {
+  const changes = from ? specChanges(from.content, to.content) : [];
+  return (
+    <div class="changed">
+      <p>
+        <strong>Why it changed from version {to.version - 1}:</strong> {why}
+      </p>
+      {from && changes.length === 0 && (
+        <p class="card-meta">
+          The content is the same as version {from.version}.
+        </p>
+      )}
+      {changes.map((c) => (
+        <div key={c.section}>
+          <h4>{c.section}</h4>
+          <ul class="diff">
+            {c.removed.map((l, n) => (
+              <li key={`-${n}`} class="removed">
+                <span aria-hidden="true">−</span> <del>{l}</del>
+              </li>
+            ))}
+            {c.added.map((l, n) => (
+              <li key={`+${n}`} class="added">
+                <span aria-hidden="true">+</span> <ins>{l}</ins>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }

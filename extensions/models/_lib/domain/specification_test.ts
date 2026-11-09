@@ -10,6 +10,7 @@ import {
   requestChanges,
   resolveQuestion,
   revise,
+  reviseSpecification,
   specificationProblems,
   submit,
 } from "./index.ts";
@@ -259,5 +260,71 @@ describe("export record", () => {
         [1, "outcome-spec/v1+json", owner.userId],
         [1, "markdown", builder.userId],
       ]);
+  });
+});
+
+describe("revising with a reason", () => {
+  const wider = {
+    ...goodSpec,
+    scope: { ...goodSpec.scope, in: [...goodSpec.scope.in, "A second room"] },
+  };
+  const reason = "  The owner now has a second room. ";
+
+  it("reopens an agreed spec, saves the next version with why, and proposes it", () => {
+    const r = reviseSpecification(
+      agreedRequest(),
+      builder,
+      { content: wider, reason, basedOnVersion: 1 },
+      T2,
+    );
+    expect(r.status).toBe("ready_for_agreement");
+    expect(r.specifications.map((s) => [s.version, s.status])).toEqual([
+      [1, "agreed"],
+      [2, "proposed"],
+    ]);
+    expect(r.specifications[1].content).toEqual(wider);
+    expect(r.specifications[1].changeSummary).toBe(
+      "The owner now has a second room.",
+    );
+    expect(r.transitions.slice(-2).map((t) => [t.action, t.note])).toEqual([
+      ["revise", null],
+      ["propose", "The owner now has a second room."],
+    ]);
+  });
+
+  it("edits the draft in place when the request is already being revised", () => {
+    const revising = revise(agreedRequest(), owner, T2);
+    const r = reviseSpecification(
+      revising,
+      owner,
+      { content: wider, reason, basedOnVersion: 2 },
+      T2,
+    );
+    expect(r.specifications.map((s) => [s.version, s.status])).toEqual([
+      [1, "agreed"],
+      [2, "proposed"],
+    ]);
+    expect(() =>
+      reviseSpecification(
+        revising,
+        owner,
+        { content: wider, reason, basedOnVersion: 1 },
+        T2,
+      )
+    ).toThrowError(expect.objectContaining({
+      code: "invalid_state",
+      message: expect.stringContaining("version 2 is newer"),
+    }));
+  });
+
+  it("needs a reason", () => {
+    expect(() =>
+      reviseSpecification(
+        agreedRequest(),
+        builder,
+        { content: wider, reason: " ", basedOnVersion: 1 },
+        T2,
+      )
+    ).toThrowError(expect.objectContaining({ code: "invalid_input" }));
   });
 });

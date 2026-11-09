@@ -30,6 +30,8 @@ export const OutcomeSpecV1Schema = z.object({
   }),
   specification: SpecificationContentSchema.extend({
     version: z.number().int().positive(),
+    /** Why it changed from the version before, when it was revised with one. */
+    changeSummary: z.string().optional(),
   }),
   agreement: z.object({
     agreedBy: personSchema,
@@ -75,7 +77,12 @@ export function toOutcomeSpecV1(
         { requestedPhrase: request.requestedPhrase }),
       url,
     },
-    specification: { version: spec.version, ...spec.content },
+    specification: {
+      version: spec.version,
+      ...spec.content,
+      ...(spec.changeSummary !== undefined &&
+        { changeSummary: spec.changeSummary }),
+    },
     agreement: {
       agreedBy: { name: agreedBy?.name ?? "", email: agreedBy?.email ?? "" },
       agreedAt: agreement.agreedAt,
@@ -149,6 +156,8 @@ export function toMarkdown(doc: OutcomeSpecV1): string {
     `Outcome specification, version ${s.version}. Agreed by ${a.agreedBy.name} (${a.agreedBy.email}) on ${
       a.agreedAt.slice(0, 10)
     }.`,
+    s.changeSummary !== undefined &&
+    `Changed from version ${s.version - 1}: ${s.changeSummary}`,
     `## Problem\n\n${s.problemStatement}`,
     `## Desired outcome\n\n${s.desiredOutcome}`,
     `## In scope\n\n${bullets(s.scope.in)}`,
@@ -163,5 +172,5 @@ export function toMarkdown(doc: OutcomeSpecV1): string {
     }`,
     `## People\n\n${people}`,
     `---\n\n${doc.format} · [request ${doc.request.id}](${doc.request.url}) · spec hash ${a.specHash}`,
-  ].join("\n\n") + "\n";
+  ].filter((part) => part !== false).join("\n\n") + "\n";
 }

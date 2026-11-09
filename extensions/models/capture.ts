@@ -38,7 +38,7 @@ import {
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
 import type { Snapshot } from "./_lib/capture/snapshot.ts";
-import { readBuildResultInput } from "./_lib/capture/build_result_input.ts";
+import { readJsonInput } from "./_lib/capture/build_result_input.ts";
 import type { Stored } from "./_lib/capture/ports.ts";
 import { type StoreContext, SwampStore } from "./_lib/capture/swamp_store.ts";
 import { toRequestView, toSummary } from "./_lib/capture/views.ts";
@@ -723,6 +723,44 @@ export const model = {
         ),
     ),
 
+    revise_specification: change(
+      "Upload a revised specification, with why it changed, and propose it for the outcome owner to agree, in one step. The outcome owner or a builder can. An agreed, building or released request is revised first. Give the spec as specification, or as an edited outcome-spec/v1 file for this request (outcomeSpec), of which only the specification is used. If the spec isn't ready or questions are open, nothing changes.",
+      "Proposed a revised specification for",
+      withId.extend({
+        reason: z.string().trim().min(1).max(2_000).describe(
+          "Why the specification changed. It is kept on the new version and shown next to the agreement.",
+        ),
+        specification: z.preprocess(
+          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+          SpecificationContentSchema,
+        ).optional().describe(
+          "The revised specification, as edit_specification takes it: an object or JSON text.",
+        ),
+        outcomeSpec: z.union([
+          z.string().min(1),
+          z.record(z.string(), z.unknown()),
+        ]).optional().describe(
+          "The revised spec as an edited outcome-spec/v1 document for this request: a file path relative to the repository, an https URL, JSON text, or an object.",
+        ),
+        basedOnVersion: z.coerce.number().int().min(1).optional().describe(
+          "The version the change starts from; refused if a newer one exists. Defaults to outcomeSpec's specification.version.",
+        ),
+      }),
+      async (s, who, a, context) =>
+        s.reviseSpecification(who, a.id, {
+          reason: a.reason,
+          ...(a.specification !== undefined && { content: a.specification }),
+          ...(a.outcomeSpec !== undefined && {
+            outcomeSpec: await readJsonInput(a.outcomeSpec, {
+              repoDir: context.repoDir,
+              fetch: (url) => globalThis.fetch(url),
+            }, "outcome spec"),
+          }),
+          ...(a.basedOnVersion !== undefined &&
+            { basedOnVersion: a.basedOnVersion }),
+        }),
+    ),
+
     review_prompt: {
       description:
         "Write what a reviewer is asked about the specification up for agreement. Only a reviewer on the request can.",
@@ -839,7 +877,7 @@ export const model = {
         context: CaptureContext,
       ) =>
         run(context, async (services, store) => {
-          const raw = await readBuildResultInput(args.result, {
+          const raw = await readJsonInput(args.result, {
             repoDir: context.repoDir,
             fetch: (url) => globalThis.fetch(url),
           });
