@@ -220,18 +220,40 @@ out. See [ADR-004](docs/adr/ADR-004-build-results.md) and
 ### Log requests from a program
 
 `workflows/workflow-capture-log-request.yaml` is the workflow puddlerouter runs.
-It needs a `capture` behavior with `defaultAs` set, and uses `sourceRef` as the
-idempotency key:
+It needs a `capture` behavior with `defaultAs` set to the account that logs
+requests, and uses `sourceRef` as the idempotency key:
 
 ```bash
 swamp workflow run @puddleworks/capture-log-request --input title="…" \
   --input description="…" --input currentProcess="…" --input sourceRef=turn-3f9a \
+  --input requester=olive@example.com \
   --input phrase="what needs counting this week" \
   --input candidateExtensions='["@example/stock"]'
 ```
 
+`requester` is the email of the person who asked, who must be in the people
+list. They are the outcome owner, so they submit, agree and export as
+themselves, and the request records that the logging account logged it from that
+`sourceRef` (the page shows it in the history). The logging account isn't a
+participant. A requester who isn't in the people list is refused, and nothing is
+logged. Without `requester` the logging account owns the request, as before. The
+same `sourceRef` from the same logging account still gives back the same
+request, whoever it was logged for.
+
 `phrase` and `candidateExtensions` are optional; given, they start the draft
 spec's recipe.
+
+A request the logging account already owns can be handed to the person who
+asked. Only the outcome owner can do it, so act as the logging account:
+
+```bash
+swamp behavior run capture transfer_ownership --input as=intake-bot@example.com \
+  --input id=12 --input to=olive@example.com
+```
+
+The new owner takes over every outcome owner's step, the old one stays on as an
+observer, and the history records the change. It works while the request is a
+draft or open.
 
 It replaces `@puddleworks/capture-client`, which called the Node app's API.
 

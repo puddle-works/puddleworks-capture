@@ -255,15 +255,24 @@ const ACTION: Record<string, string> = {
   import: "Imported",
   editDetails: "Details changed",
   closeAsDuplicate: "Closed as a duplicate",
+  transferOwnership: "Handed to a new outcome owner",
 };
 
 /** Every state change or change to the details, who made it and when, after the request was raised. */
 export function historyEntries(request: WebRequest): HistoryEntry[] {
+  // The first owner handed it on, if anyone did; only an owner can.
+  const firstOwner = request.transitions.find((t) =>
+    t.action === "transferOwnership"
+  )?.byName;
+  const logged = request.loggedBy;
   const raised: HistoryEntry = {
     label: "Raised",
-    by: request.outcomeOwner.name,
+    by: firstOwner ?? request.outcomeOwner.name,
     at: request.createdAt,
-    note: null,
+    note: logged &&
+      `Logged by ${logged.name}${
+        logged.sourceRef ? ` from ${logged.sourceRef}` : ""
+      }.`,
   };
   const exportedAs = (e: WebRequest["exports"][number]) =>
     `Exported as ${FORMAT[e.format]} (version ${e.specVersion})`;

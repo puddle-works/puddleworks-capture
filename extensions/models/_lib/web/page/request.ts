@@ -52,7 +52,7 @@ function Request({ request: r }: {
           "span",
           null,
           "Raised by ",
-          r.outcomeOwner.name,
+          historyEntries(r)[0].by,
           " · ",
           formatTime(r.createdAt),
         ),

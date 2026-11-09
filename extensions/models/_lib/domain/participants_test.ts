@@ -13,6 +13,7 @@ import {
   requestChanges,
   roleOf,
   submit,
+  transferOwnership,
   withdraw,
 } from "./index.ts";
 import {
@@ -326,5 +327,40 @@ describe("joining and inviting", () => {
   it("refuses people who aren't on the request", () => {
     expect(() => withdraw(discussingRequest(), stranger, "", T1))
       .toThrowError(expect.objectContaining({ code: "not_allowed" }));
+  });
+});
+
+describe("handing a request to a new outcome owner", () => {
+  it("makes a builder already on it the owner, without a second entry", () => {
+    const r = transferOwnership(discussingRequest(), owner, builder, T1);
+    expect(r.outcomeOwnerId).toBe(builder.userId);
+    expect(r.participants.map((p) => [p.userId, p.role])).toEqual([
+      [builder.userId, "outcome_owner"],
+      [owner.userId, "observer"],
+    ]);
+    // The new owner can agree, and the old one can't any more.
+    expect(roleOf(r, owner.userId)).toBe("observer");
+    expect(can(roleOf(r, builder.userId)!, "agree")).toBe(true);
+  });
+
+  it("is the outcome owner's alone, and not once the request is closed", () => {
+    expect(() => transferOwnership(discussingRequest(), builder, builder, T1))
+      .toThrowError(expect.objectContaining({ code: "not_allowed" }));
+    expect(() => transferOwnership(discussingRequest(), stranger, builder, T1))
+      .toThrowError(expect.objectContaining({ code: "not_allowed" }));
+    const closed = withdraw(discussingRequest(), owner, "", T1);
+    expect(() => transferOwnership(closed, owner, colleague, T2))
+      .toThrowError(expect.objectContaining({ code: "invalid_state" }));
+    expect(() => transferOwnership(draftRequest(), owner, owner, T1))
+      .toThrowError(expect.objectContaining({ code: "invalid_input" }));
+  });
+
+  it("works on a draft, which the new owner can then read and submit", () => {
+    const r = transferOwnership(draftRequest(), owner, colleague, T1);
+    expect(canRead(r, colleague)).toBe(true);
+    expect(submit(r, colleague, T2).status).toBe("discussing");
+    expect(() => submit(r, owner, T2)).toThrowError(
+      expect.objectContaining({ code: "not_allowed" }),
+    );
   });
 });
