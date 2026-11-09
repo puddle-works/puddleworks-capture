@@ -20,6 +20,7 @@ export {
   removeParticipant,
   type RequestDetails,
   submit,
+  transferOwnership,
   withdraw,
 } from "./request.ts";
 export * from "./review.ts";

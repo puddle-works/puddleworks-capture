@@ -19,6 +19,7 @@ export type AllowedAction =
   | "export"
   | "message"
   | "invite"
+  | "transferOwnership"
   | "join";
 
 /**
@@ -48,6 +49,9 @@ export function allowedActions(
   });
   if (role === "outcome_owner" && canEditDetails(request)) {
     allowed.push("editDetails");
+  }
+  if (role === "outcome_owner" && !isClosed(request)) {
+    allowed.push("transferOwnership");
   }
   if (
     can(role, "editSpecification") &&

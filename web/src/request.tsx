@@ -65,7 +65,7 @@ function Request({ request: r }: { request: WebRequest }) {
         <div class="show-meta">
           <span class={badgeClass(r.status)}>{STATUS[r.status]}</span>
           <span>
-            Raised by {r.outcomeOwner.name} · {formatTime(r.createdAt)}
+            Raised by {historyEntries(r)[0].by} · {formatTime(r.createdAt)}
           </span>
           <span>Updated {formatTime(r.updatedAt)}</span>
           {r.openQuestionCount > 0 && (

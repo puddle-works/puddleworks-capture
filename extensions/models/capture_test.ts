@@ -162,6 +162,107 @@ describe("@puddleworks/capture/requests", () => {
     expect(versions.at(-1)!.attributes).toEqual(versions[0].attributes);
   });
 
+  it("logs a request for the person who asked, who then owns it and agrees it themselves", async () => {
+    const { swamp, run } = setup({ defaultAs: "intake-bot@example.com" });
+    await people(run);
+    await run("add_person", {
+      email: "intake-bot@example.com",
+      name: "Intake bot",
+    });
+    const input = {
+      title: "Stock counts",
+      description: "We count every Friday.",
+      idempotencyKey: "turn-7",
+      requester: "olive@example.com",
+    };
+
+    // Someone not in the people list is refused, and nothing is logged.
+    await expect.rejects(
+      run("create_request", { ...input, requester: "nobody@example.com" }),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "nobody@example.com isn't in Capture's people list",
+        ),
+      }),
+    );
+    expect(swamp.written.filter((r) => r.specName === "request")).toEqual([]);
+
+    const first = await run("create_request", input);
+    const again = await run("create_request", input);
+    expect(again.dataHandles.map((h) => h.name)).toEqual(
+      first.dataHandles.map((h) => h.name),
+    );
+    const logged = swamp.data(first.dataHandles[0].name)! as {
+      id: string;
+      outcomeOwnerId: string;
+      loggedBy: unknown;
+      participants: { email: string; role: string }[];
+    };
+    expect(logged.participants.map((p) => [p.email, p.role])).toEqual([
+      ["olive@example.com", "outcome_owner"],
+    ]);
+    expect(logged.loggedBy).toMatchObject({
+      email: "intake-bot@example.com",
+      name: "Intake bot",
+      sourceRef: "turn-7",
+    });
+
+    // The person who asked takes it through to agreement as themselves.
+    const olive = { as: "olive@example.com", id: logged.id };
+    const bea = { as: "bea@example.com", id: logged.id };
+    await run("submit", olive);
+    await run("join_request", bea);
+    await run("edit_specification", { ...bea, specification: goodSpec });
+    await run("propose", bea);
+    await run("agree", { ...olive, version: "1" });
+    await run("export_outcome_spec", olive);
+    expect(swamp.data(`outcome-spec-${logged.id}`)).toMatchObject({
+      agreement: { agreedBy: { email: "olive@example.com" } },
+    });
+
+    // Without requester the logging account owns it, as before.
+    const own = await run("create_request", {
+      title: "Another",
+      description: "",
+      idempotencyKey: "turn-8",
+    });
+    const bots = swamp.data(own.dataHandles[0].name)! as Record<
+      string,
+      unknown
+    >;
+    expect("loggedBy" in bots).toBe(false);
+    expect(
+      (bots.participants as { email: string; role: string }[]).map((p) => [
+        p.email,
+        p.role,
+      ]),
+    ).toEqual([["intake-bot@example.com", "outcome_owner"]]);
+
+    // A request the bot already owns is handed to the person who asked.
+    await run("transfer_ownership", {
+      id: String(bots.id),
+      to: "olive@example.com",
+    });
+    const handed = swamp.data(`request-${bots.id}`)! as {
+      participants: { email: string; role: string }[];
+      transitions: { action: string; note: string }[];
+    };
+    expect(handed.participants.map((p) => [p.email, p.role])).toEqual([
+      ["olive@example.com", "outcome_owner"],
+      ["intake-bot@example.com", "observer"],
+    ]);
+    expect(handed.transitions.map((t) => [t.action, t.note])).toEqual([
+      [
+        "transferOwnership",
+        "Outcome owner changed from Intake bot to Olive Owner.",
+      ],
+    ]);
+    await run("submit", { as: "olive@example.com", id: String(bots.id) });
+    expect(swamp.data(`request-${bots.id}`)).toMatchObject({
+      status: "discussing",
+    });
+  });
+
   it("logs a requested phrase into the draft spec's recipe", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);

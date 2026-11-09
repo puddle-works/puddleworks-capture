@@ -167,6 +167,15 @@ export interface ExampleCheck {
   detail: string | null;
 }
 
+/** Someone who logged a request for the person who asked. Not a participant. */
+export interface LoggedBy {
+  userId: string;
+  name: string;
+  email: string;
+  /** Where it came from, such as a router turn id; null if not said. */
+  sourceRef: string | null;
+}
+
 export interface Transition {
   from: RequestStatus;
   to: RequestStatus;
@@ -191,6 +200,11 @@ export interface Request {
    */
   requestedPhrase?: string;
   outcomeOwnerId: string;
+  /**
+   * Who logged it for the outcome owner, such as a router's bot account, and
+   * where from. Absent when the outcome owner raised it themselves.
+   */
+  loggedBy?: LoggedBy;
   status: RequestStatus;
   closedReason: string | null;
   participants: Participant[];

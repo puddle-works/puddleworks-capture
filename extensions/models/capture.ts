@@ -423,7 +423,7 @@ export const model = {
 
     create_request: {
       description:
-        "Log a request as a draft owned by the person acting. Pass idempotencyKey so a retry gives back the same request.",
+        "Log a request as a draft owned by the person acting, or by requester when a program logs it for the person who asked. Pass idempotencyKey so a retry gives back the same request.",
       arguments: z.object({
         as,
         title: z.string().min(1).max(200).describe(
@@ -447,6 +447,9 @@ export const model = {
         idempotencyKey: z.string().min(1).max(200).optional().describe(
           "The same key from the same person always gives the same request, so a retry never makes a second one.",
         ),
+        requester: z.union([z.literal(""), z.email()]).default("").describe(
+          "The email of the person who asked, who must be in the people list. They own the request, and it records that the person acting logged it for them. Blank: the person acting owns it.",
+        ),
       }),
       execute: (
         args: {
@@ -457,6 +460,7 @@ export const model = {
           phrase: string;
           candidateExtensions: string[];
           idempotencyKey?: string;
+          requester: string;
         },
         context: CaptureContext,
       ) =>
@@ -471,6 +475,7 @@ export const model = {
               candidateExtensions: args.candidateExtensions,
             },
             args.idempotencyKey,
+            args.requester || undefined,
           );
           // A retry changes nothing, but writes the request again so swamp
           // gets a real handle for it: a step reading the output sees the
@@ -627,6 +632,14 @@ export const model = {
         );
         return stored;
       },
+    ),
+    transfer_ownership: change(
+      "Hand a request to someone else in the people list as its outcome owner, such as the person who asked for a request a bot logged. Only the outcome owner can, while the request is open or a draft. The old owner stays on as an observer, and the change shows in the history.",
+      "Handed over",
+      withId.extend({
+        to: z.email().describe("Who becomes the outcome owner."),
+      }),
+      (s, who, a) => s.transferOwnership(who, a.id, a.to),
     ),
     revise: change(
       "Start a new specification version after agreement.",

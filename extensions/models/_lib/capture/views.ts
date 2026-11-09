@@ -58,6 +58,7 @@ export function toRequestView(stored: Stored, viewer: Person) {
     initialDescription: request.initialDescription,
     currentProcess: request.currentProcess,
     requestedPhrase: request.requestedPhrase ?? null,
+    loggedBy: request.loggedBy ?? null,
     closedReason: request.closedReason,
     participants: request.participants.map((p) => ({ ...p })),
     specification: spec
@@ -115,6 +116,7 @@ export function toWebRequest(stored: Stored): WebRequest {
     initialDescription: request.initialDescription,
     currentProcess: request.currentProcess,
     requestedPhrase: request.requestedPhrase ?? null,
+    loggedBy: request.loggedBy ?? null,
     closedReason: request.closedReason,
     participants: request.participants,
     messages: request.messages,

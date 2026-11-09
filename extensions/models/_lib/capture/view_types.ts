@@ -4,6 +4,7 @@ import type {
   BuildResultRecord,
   ExampleCheck,
   ExportRecord,
+  LoggedBy,
   Message,
   Participant,
   RequestStatus,
@@ -53,6 +54,8 @@ export interface WebRequest extends WebSummary {
   currentProcess: string;
   /** The phrase the recipe must answer as asked, or null if none was given. */
   requestedPhrase: string | null;
+  /** Who logged it for the outcome owner, and where from; null if they raised it. */
+  loggedBy: LoggedBy | null;
   closedReason: string | null;
   participants: Participant[];
   messages: Message[];

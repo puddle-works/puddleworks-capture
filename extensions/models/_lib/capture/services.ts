@@ -42,6 +42,7 @@ import {
   submit,
   toMarkdown,
   toOutcomeSpecV1,
+  transferOwnership,
   upgradeRequest,
   withdraw,
 } from "../domain/index.ts";
@@ -217,12 +218,19 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
 
     actor,
 
+    /**
+     * Logs a request. `requester`, when given, is the person who asked: they
+     * own it, and it records that `as` logged it for them. The idempotency
+     * key is still the logger's, so a retry gives the same request.
+     */
     async create(
       as: string,
       input: Omit<NewRequest, "id">,
       idempotencyKey?: string,
+      requester?: string,
     ): Promise<{ stored: Stored; created: boolean }> {
       const person = await actor(as);
+      const owner = requester ? await actor(requester) : person;
       const { next } = await numberRequests();
       if (idempotencyKey !== undefined) {
         const earlier = (await store.allRequests()).find((s) =>
@@ -233,7 +241,17 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         if (earlier) return { stored: earlier, created: false };
       }
       const stored: Stored = {
-        request: createRequest({ ...input, id: newId() }, person, clock()),
+        request: createRequest(
+          { ...input, id: newId() },
+          owner,
+          clock(),
+          {
+            userId: person.userId,
+            name: person.name,
+            email: person.email,
+            sourceRef: idempotencyKey ?? null,
+          },
+        ),
         version: 1,
         idempotencyKeys: idempotencyKey === undefined
           ? []
@@ -295,6 +313,18 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       mutate(as, id, (r, p, at) => requestChanges(r, p, note, at)),
     revise: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => revise(r, p, at)),
+    transferOwnership: async (as: string, id: string, email: string) => {
+      const to = await personByEmail(email);
+      if (!to) {
+        // Checked after the owner can see the request, so the answer leaks nothing.
+        await load(await actor(as), id);
+        throw new DomainError(
+          "not_found",
+          `${email} isn't in Capture's people list yet. Add them with add_person, then hand the request to them.`,
+        );
+      }
+      return mutate(as, id, (r, p, at) => transferOwnership(r, p, to, at));
+    },
     join: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => joinAsBuilder(r, p, at)),
 

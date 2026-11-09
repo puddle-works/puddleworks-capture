@@ -94,6 +94,7 @@ describe("allowed actions", () => {
       "submit",
       "withdraw",
       "editDetails",
+      "transferOwnership",
       "editSpecification",
     ]);
   });

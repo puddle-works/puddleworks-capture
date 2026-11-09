@@ -1,6 +1,7 @@
 import { DomainError } from "./errors.ts";
 import { applyTransition, checkTransition, isClosed } from "./lifecycle.ts";
 import {
+  type LoggedBy,
   type NewRequest,
   NewRequestSchema,
   type Person,
@@ -13,11 +14,13 @@ import { startingSpec } from "./recipe.ts";
 /**
  * A draft owned by `owner`. A phrase, or the extensions a router found,
  * start the draft spec's recipe; the phrase becomes the requested phrase.
+ * `loggedBy` is who logged it for the owner, when that was someone else.
  */
 export function createRequest(
   input: NewRequest,
   owner: Person,
   at: string,
+  loggedBy?: LoggedBy,
 ): Request {
   const parsed = NewRequestSchema.safeParse(input);
   if (!parsed.success) {
@@ -34,6 +37,7 @@ export function createRequest(
     ...fields,
     ...(requestedPhrase !== undefined && { requestedPhrase }),
     outcomeOwnerId: owner.userId,
+    ...(loggedBy && loggedBy.userId !== owner.userId && { loggedBy }),
     status: "draft",
     closedReason: null,
     participants: [
@@ -308,5 +312,72 @@ export function removeParticipant(
     ...request,
     updatedAt: at,
     participants: request.participants.filter((p) => p.userId !== userId),
+  };
+}
+
+/**
+ * The outcome owner hands the request to someone else in the people list,
+ * such as the person who asked for a request a bot logged. The new owner
+ * takes over every outcome owner's step; the old one stays on as an
+ * observer, so they can still read it, until someone takes them off.
+ */
+export function transferOwnership(
+  request: Request,
+  actor: Person,
+  to: Person,
+  at: string,
+): Request {
+  if (!participantOf(request, actor.userId)) {
+    throw new DomainError("not_allowed", "You aren't part of this request.");
+  }
+  if (actor.userId !== request.outcomeOwnerId) {
+    throw new DomainError(
+      "not_allowed",
+      "Only the outcome owner can hand the request to someone else.",
+    );
+  }
+  if (isClosed(request)) {
+    throw new DomainError(
+      "invalid_state",
+      `The request is ${request.status}, so its outcome owner can't change.`,
+    );
+  }
+  if (to.userId === request.outcomeOwnerId) {
+    throw new DomainError(
+      "invalid_input",
+      `${to.name} is already the outcome owner.`,
+    );
+  }
+  const from = participantOf(request, request.outcomeOwnerId)!;
+  const others = request.participants.filter((p) =>
+    p.userId !== from.userId && p.userId !== to.userId
+  );
+  const already = participantOf(request, to.userId);
+  return {
+    ...request,
+    outcomeOwnerId: to.userId,
+    updatedAt: at,
+    participants: [
+      {
+        userId: to.userId,
+        name: already?.name ?? to.name,
+        email: already?.email ?? to.email,
+        role: "outcome_owner",
+        invitedBy: already ? already.invitedBy : actor.userId,
+        joinedAt: already?.joinedAt ?? at,
+      },
+      ...others,
+      { ...from, role: "observer" },
+    ],
+    transitions: [...request.transitions, {
+      from: request.status,
+      to: request.status,
+      action: "transferOwnership",
+      by: actor.userId,
+      at,
+      note: `Outcome owner changed from ${from.name} to ${
+        already?.name ?? to.name
+      }.`,
+    }],
   };
 }
