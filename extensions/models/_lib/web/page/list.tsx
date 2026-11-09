@@ -1,13 +1,11 @@
-// Every request, grouped by where it is, and the people list. Each stage shows
-// its first few requests; the rest roll down beneath them on "Show all".
-import { useEffect, useState } from "preact/hooks";
+// Every request, grouped by your next step, and the people list. Each group
+// shows its first few requests; the rest roll down beneath them on "Show
+// all", which the page's script opens.
 import type {
   RequestRef,
   WebOverview,
   WebSummary,
-} from "../../extensions/models/_lib/capture/view_types.ts";
-import * as api from "./api.ts";
-import { Link } from "./nav.tsx";
+} from "../../capture/view_types.ts";
 import {
   badgeClass,
   formatTime,
@@ -19,24 +17,7 @@ import {
   STATUS,
 } from "./words.ts";
 
-export function RequestList({ changes }: { changes: number }) {
-  const [data, setData] = useState<WebOverview | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    document.title = "Requests — Capture";
-  }, []);
-
-  useEffect(() => {
-    api.overview().then((d) => {
-      setData(d);
-      setError(null);
-    }, (e) => setError(String(e.message ?? e)));
-  }, [changes]);
-
-  if (error) return <p role="alert" class="flash-alert">{error}</p>;
-  if (!data) return <p class="empty">Loading…</p>;
-
+export function RequestList({ data }: { data: WebOverview }) {
   return (
     <>
       <h1>Requests</h1>
@@ -78,7 +59,6 @@ export function RequestList({ changes }: { changes: number }) {
 }
 
 function Stage({ group, items }: { group: Group; items: WebSummary[] }) {
-  const [open, setOpen] = useState(false);
   const { shown, rest } = splitStage(group, items);
   const id = `group-${group.key}`;
   const restId = `${id}-rest`;
@@ -88,21 +68,19 @@ function Stage({ group, items }: { group: Group; items: WebSummary[] }) {
       {shown.map((r) => <Card key={r.id} request={r} />)}
       {rest.length > 0 && (
         <>
-          <div id={restId} class={open ? "concertina open" : "concertina"}>
-            <div class="concertina-inner" inert={!open}>
+          <div id={restId} class="concertina">
+            <div class="concertina-inner" inert>
               {rest.map((r) => <Card key={r.id} request={r} />)}
             </div>
           </div>
           <button
             type="button"
             class="link-button show-all"
-            aria-expanded={open}
+            aria-expanded="false"
             aria-controls={restId}
-            onClick={() => setOpen(!open)}
+            data-open-label={group.folded ? "Hide" : "Show fewer"}
           >
-            {open
-              ? (group.folded ? "Hide" : "Show fewer")
-              : group.folded
+            {group.folded
               ? `Show ${items.length} closed`
               : `Show all ${items.length}`}
           </button>
@@ -119,9 +97,9 @@ export function RequestLinks({ refs }: { refs: RequestRef[] }) {
       {refs.map((d, i) => (
         <>
           {i > 0 && ", "}
-          <Link key={d.id} to={`/requests/${encodeURIComponent(d.id)}`}>
+          <a key={d.id} href={`/requests/${encodeURIComponent(d.id)}`}>
             {d.number === null ? d.title : `#${d.number}`}
-          </Link>
+          </a>
         </>
       ))}
     </>
@@ -132,9 +110,9 @@ function Card({ request }: { request: WebSummary }) {
   return (
     <div class="card">
       <div class="card-title">
-        <Link to={`/requests/${encodeURIComponent(request.id)}`}>
+        <a href={`/requests/${encodeURIComponent(request.id)}`}>
           {numbered(request)}
-        </Link>
+        </a>
         <div class="card-meta">
           {request.outcomeOwner.name} · updated {formatTime(request.updatedAt)}
           {request.openQuestionCount > 0 &&

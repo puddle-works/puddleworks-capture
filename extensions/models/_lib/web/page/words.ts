@@ -1,15 +1,7 @@
-// The words the page uses for Capture's codes, which path shows which view,
-// and the history timeline, in one place. Nothing here touches the DOM, so
-// words_test runs it under deno test.
-import type {
-  ExportFormat,
-  Recipe,
-  Role,
-} from "../../extensions/models/_lib/domain/model.ts";
-import type {
-  RequestStatus,
-  WebRequest,
-} from "../../extensions/models/_lib/capture/view_types.ts";
+// The words the page uses for Capture's codes, the list's groups and the
+// history timeline, in one place.
+import type { ExportFormat, Recipe, Role } from "../../domain/model.ts";
+import type { RequestStatus, WebRequest } from "../../capture/view_types.ts";
 
 export const STATUS: Record<RequestStatus, string> = {
   draft: "Draft",
@@ -178,25 +170,6 @@ export function pieceLabels(pieces: Recipe["pieces"]): string[] {
 
 /** "ready_for_agreement" → "ready for agreement" */
 export const words = (code: string) => code.replaceAll("_", " ");
-
-export type Route = { page: "list" } | { page: "request"; id: string } | {
-  page: "missing";
-};
-
-/** The view a path shows: the server serves the page on / and /requests/<id>. */
-export function routeOf(pathname: string): Route {
-  let parts: string[];
-  try {
-    parts = pathname.split("/").filter((p) => p !== "").map(decodeURIComponent);
-  } catch {
-    return { page: "missing" };
-  }
-  if (parts.length === 0) return { page: "list" };
-  if (parts.length === 2 && parts[0] === "requests") {
-    return { page: "request", id: parts[1] };
-  }
-  return { page: "missing" };
-}
 
 export interface HistoryEntry {
   label: string;

@@ -1,14 +1,8 @@
 // One request with everything on it: details, people, discussion, the
 // specification and its versions, agreements, exports, builds and history.
-import { useEffect, useState } from "preact/hooks";
-import type { Message } from "../../extensions/models/_lib/domain/model.ts";
-import type {
-  OldHistory,
-  WebRequest,
-} from "../../extensions/models/_lib/capture/view_types.ts";
-import * as api from "./api.ts";
+import type { Message } from "../../domain/model.ts";
+import type { OldHistory, WebRequest } from "../../capture/view_types.ts";
 import { RequestLinks } from "./list.tsx";
-import { Link } from "./nav.tsx";
 import {
   badgeClass,
   FORMAT,
@@ -25,35 +19,11 @@ import {
 type Spec = WebRequest["specifications"][number];
 type Build = WebRequest["buildResults"][number];
 
-export function RequestPage({ id, changes }: { id: string; changes: number }) {
-  const [request, setRequest] = useState<WebRequest | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.request(id).then(
-      (r) => {
-        setRequest(r);
-        setError(null);
-      },
-      (e) =>
-        setError(
-          e instanceof api.NotFound
-            ? "There is no such request."
-            : String(e.message ?? e),
-        ),
-    );
-  }, [id, changes]);
-
-  useEffect(() => {
-    document.title = `${request ? numbered(request) : "Request"} — Capture`;
-  }, [request?.number, request?.title]);
-
+export function RequestPage({ request }: { request: WebRequest }) {
   return (
     <>
-      <Link class="back-link" to="/">All requests</Link>
-      {error && <p role="alert" class="flash-alert">{error}</p>}
-      {!error && !request && <p class="empty">Loading…</p>}
-      {!error && request && <Request request={request} />}
+      <a class="back-link" href="/">All requests</a>
+      <Request request={request} />
     </>
   );
 }
@@ -194,10 +164,6 @@ const excerpt = (text: string) =>
 function Specifications({ request }: { request: WebRequest }) {
   const versions = request.specifications;
   const latest = versions.at(-1);
-  const [shown, setShown] = useState<number | null>(null);
-  const older = shown === null
-    ? undefined
-    : versions.find((v) => v.version === shown);
   return (
     <section aria-labelledby="spec-heading">
       <h2 id="spec-heading">Specification</h2>
@@ -239,24 +205,18 @@ function Specifications({ request }: { request: WebRequest }) {
           <ul aria-label="Earlier versions" class="versions">
             {versions.slice(0, -1).reverse().map((v) => (
               <li key={v.version}>
-                <button
-                  type="button"
-                  class="link-button"
-                  aria-pressed={shown === v.version}
-                  onClick={() =>
-                    setShown(shown === v.version ? null : v.version)}
-                >
-                  Version {v.version} · {words(v.status)} ·{" "}
-                  {formatTime(v.updatedAt)}
-                </button>
+                <details>
+                  <summary class="link-button">
+                    Version {v.version} · {words(v.status)} ·{" "}
+                    {formatTime(v.updatedAt)}
+                  </summary>
+                  <div class="older-version">
+                    <Version spec={v} />
+                  </div>
+                </details>
               </li>
             ))}
           </ul>
-          {older && (
-            <div class="older-version">
-              <Version spec={older} />
-            </div>
-          )}
         </>
       )}
     </section>

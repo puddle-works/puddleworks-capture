@@ -1,5 +1,4 @@
-// What the viewer page is sent. Types only, shared by the server and the page
-// (web/src), so the two can't drift apart.
+// What the viewer renders its page from. Types only.
 import type {
   BuildResultRecord,
   ExampleCheck,

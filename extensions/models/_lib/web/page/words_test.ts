@@ -1,9 +1,5 @@
-// The page's pure parts: which view a path shows, and the history timeline.
-import {
-  describe,
-  expect,
-  it,
-} from "../../extensions/models/_lib/domain/test_bdd.ts";
+// The page's words: the list's groups and the history timeline.
+import { describe, expect, it } from "../../domain/test_bdd.ts";
 import {
   agreedRequest,
   builder,
@@ -12,13 +8,13 @@ import {
   owner,
   releasingResult,
   T2,
-} from "../../extensions/models/_lib/domain/test_fixtures.ts";
+} from "../../domain/test_fixtures.ts";
 import {
   editDetails,
   recordBuildResult,
   recordExport,
-} from "../../extensions/models/_lib/domain/index.ts";
-import { toWebRequest } from "../../extensions/models/_lib/capture/views.ts";
+} from "../../domain/index.ts";
+import { toWebRequest } from "../../capture/views.ts";
 import {
   badgeClass,
   GROUPS,
@@ -26,24 +22,9 @@ import {
   numbered,
   pieceLabels,
   plural,
-  routeOf,
   SHOWN_PER_STAGE,
   splitStage,
 } from "./words.ts";
-
-describe("routeOf", () => {
-  it("shows the list at / and a request at /requests/<id>", () => {
-    expect(routeOf("/")).toEqual({ page: "list" });
-    expect(routeOf("/requests/r-1")).toEqual({ page: "request", id: "r-1" });
-    expect(routeOf("/requests/a%20b")).toEqual({ page: "request", id: "a b" });
-  });
-
-  it("shows nothing for any other path", () => {
-    expect(routeOf("/requests/")).toEqual({ page: "missing" });
-    expect(routeOf("/elsewhere")).toEqual({ page: "missing" });
-    expect(routeOf("/requests/%E0")).toEqual({ page: "missing" });
-  });
-});
 
 describe("numbered", () => {
   it("puts the request's number before its title, when it has one", () => {
