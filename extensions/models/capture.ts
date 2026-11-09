@@ -6,8 +6,9 @@
  * email) or the behavior's `defaultAs`, and Capture's rules decide what that
  * person may do: the outcome owner submits and agrees, builders join and
  * write the specification, observers read. Once it is agreed,
- * record_build_result records what a build of it produced: Building, then
- * Released once it is published and every recipe example passed.
+ * start_building marks it Building when work starts, and record_build_result
+ * records what a build of it produced: Building, then Released once it is
+ * published and every recipe example passed.
  *
  * Output:
  * - `request`: one request and everything on it (`request-<id>`), a new
@@ -38,7 +39,7 @@ import {
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
 import type { Snapshot } from "./_lib/capture/snapshot.ts";
-import { readBuildResultInput } from "./_lib/capture/build_result_input.ts";
+import { readJsonInput } from "./_lib/capture/build_result_input.ts";
 import type { Stored } from "./_lib/capture/ports.ts";
 import { type StoreContext, SwampStore } from "./_lib/capture/swamp_store.ts";
 import { toRequestView, toSummary } from "./_lib/capture/views.ts";
@@ -181,7 +182,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.04.1",
+  version: "2026.11.09.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -243,6 +244,18 @@ export const model = {
       toVersion: "2026.11.04.1",
       description:
         "edit_details works while discussing and is recorded in the history; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.08.1",
+      description:
+        "start_building marks an agreed request as Building before any build result; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.09.1",
+      description:
+        "Released with the page's Building text; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -423,7 +436,7 @@ export const model = {
 
     create_request: {
       description:
-        "Log a request as a draft owned by the person acting. Pass idempotencyKey so a retry gives back the same request.",
+        "Log a request as a draft owned by the person acting, or by requester when a program logs it for the person who asked. Pass idempotencyKey so a retry gives back the same request.",
       arguments: z.object({
         as,
         title: z.string().min(1).max(200).describe(
@@ -447,6 +460,9 @@ export const model = {
         idempotencyKey: z.string().min(1).max(200).optional().describe(
           "The same key from the same person always gives the same request, so a retry never makes a second one.",
         ),
+        requester: z.union([z.literal(""), z.email()]).default("").describe(
+          "The email of the person who asked, who must be in the people list. They own the request, and it records that the person acting logged it for them. Blank: the person acting owns it.",
+        ),
       }),
       execute: (
         args: {
@@ -457,6 +473,7 @@ export const model = {
           phrase: string;
           candidateExtensions: string[];
           idempotencyKey?: string;
+          requester: string;
         },
         context: CaptureContext,
       ) =>
@@ -471,6 +488,7 @@ export const model = {
               candidateExtensions: args.candidateExtensions,
             },
             args.idempotencyKey,
+            args.requester || undefined,
           );
           // A retry changes nothing, but writes the request again so swamp
           // gets a real handle for it: a step reading the output sees the
@@ -628,11 +646,25 @@ export const model = {
         return stored;
       },
     ),
+    transfer_ownership: change(
+      "Hand a request to someone else in the people list as its outcome owner, such as the person who asked for a request a bot logged. Only the outcome owner can, while the request is open or a draft. The old owner stays on as an observer, and the change shows in the history.",
+      "Handed over",
+      withId.extend({
+        to: z.email().describe("Who becomes the outcome owner."),
+      }),
+      (s, who, a) => s.transferOwnership(who, a.id, a.to),
+    ),
     revise: change(
       "Start a new specification version after agreement.",
       "Started a new version of",
       withId,
       (s, who, a) => s.revise(who, a.id),
+    ),
+    start_building: change(
+      "Mark an agreed request as Building, when work on it starts and before any build result. Only a builder can. Build results recorded after that keep it Building until one is released.",
+      "Started building",
+      withId,
+      (s, who, a) => s.startBuilding(who, a.id),
     ),
     withdraw: change(
       "Withdraw a request. Only its outcome owner can.",
@@ -649,6 +681,16 @@ export const model = {
         ),
       }),
       (s, who, a) => s.decline(who, a.id, a.reason),
+    ),
+    close_as_duplicate: change(
+      "Close a request that repeats another, such as a need a tool logged again. Its outcome owner or a builder can, while it is a draft or still open. The other request must not be closed, and counts it as asked again.",
+      "Closed as a duplicate",
+      withId.extend({
+        of: z.string().trim().min(1).describe(
+          "The request this one repeats: its number (12 or #12) or its id.",
+        ),
+      }),
+      (s, who, a) => s.closeAsDuplicate(who, a.id, a.of),
     ),
 
     invite: change(
@@ -705,7 +747,7 @@ export const model = {
           (v) => (typeof v === "string" ? JSON.parse(v) : v),
           SpecificationContentSchema,
         ).describe(
-          "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions, acceptanceCriteria [{id, text}] and recipe {examples [{phrase, answer}], pieces [{name, shape: int, repo or word}], whenEmpty, candidateExtensions}, as an object or JSON text. Leave recipe out to keep the one there. A requested phrase must stay the recipe's first example.",
+          "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions, acceptanceCriteria [{id, text}] and recipe {examples [{phrase, answer}], pieces [{name, shape: int, repo or word}], whenEmpty, candidateExtensions} and effects {kind: read or write, changes: what it changes, needed for write}, as an object or JSON text. Leave recipe or effects out to keep the one there; a spec with no effects counts as write. A requested phrase must stay the recipe's first example.",
         ),
         basedOnMessageIds: z.array(z.string()).default([]).describe(
           "The messages it draws on.",
@@ -721,6 +763,44 @@ export const model = {
           { content: a.specification, basedOnMessageIds: a.basedOnMessageIds },
           a.ifMatch ?? null,
         ),
+    ),
+
+    revise_specification: change(
+      "Upload a revised specification, with why it changed, and propose it for the outcome owner to agree, in one step. The outcome owner or a builder can. An agreed, building or released request is revised first. Give the spec as specification, or as an edited outcome-spec/v1 file for this request (outcomeSpec), of which only the specification is used. If the spec isn't ready or questions are open, nothing changes.",
+      "Proposed a revised specification for",
+      withId.extend({
+        reason: z.string().trim().min(1).max(2_000).describe(
+          "Why the specification changed. It is kept on the new version and shown next to the agreement.",
+        ),
+        specification: z.preprocess(
+          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+          SpecificationContentSchema,
+        ).optional().describe(
+          "The revised specification, as edit_specification takes it: an object or JSON text.",
+        ),
+        outcomeSpec: z.union([
+          z.string().min(1),
+          z.record(z.string(), z.unknown()),
+        ]).optional().describe(
+          "The revised spec as an edited outcome-spec/v1 document for this request: a file path relative to the repository, an https URL, JSON text, or an object.",
+        ),
+        basedOnVersion: z.coerce.number().int().min(1).optional().describe(
+          "The version the change starts from; refused if a newer one exists. Defaults to outcomeSpec's specification.version.",
+        ),
+      }),
+      async (s, who, a, context) =>
+        s.reviseSpecification(who, a.id, {
+          reason: a.reason,
+          ...(a.specification !== undefined && { content: a.specification }),
+          ...(a.outcomeSpec !== undefined && {
+            outcomeSpec: await readJsonInput(a.outcomeSpec, {
+              repoDir: context.repoDir,
+              fetch: (url) => globalThis.fetch(url),
+            }, "outcome spec"),
+          }),
+          ...(a.basedOnVersion !== undefined &&
+            { basedOnVersion: a.basedOnVersion }),
+        }),
     ),
 
     review_prompt: {
@@ -824,7 +904,7 @@ export const model = {
 
     record_build_result: {
       description:
-        "Record a build-result/v1 against the request its source.url names. The first moves an agreed request to building; it is released once the latest build is published and every example in the agreed recipe passed. The same result twice changes nothing.",
+        "Record a build-result/v1 against the request its source.url names. The first moves an agreed request to building, unless start_building already did; it is released once the latest build is published and every example in the agreed recipe passed. The same result twice changes nothing.",
       arguments: z.object({
         as,
         result: z.union([
@@ -839,7 +919,7 @@ export const model = {
         context: CaptureContext,
       ) =>
         run(context, async (services, store) => {
-          const raw = await readBuildResultInput(args.result, {
+          const raw = await readJsonInput(args.result, {
             repoDir: context.repoDir,
             fetch: (url) => globalThis.fetch(url),
           });

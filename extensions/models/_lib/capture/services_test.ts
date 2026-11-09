@@ -261,6 +261,32 @@ describe("requests", () => {
   });
 });
 
+describe("duplicates", () => {
+  it("lets a builder close someone else's draft as a repeat, by number", async () => {
+    const { services } = await setup();
+    const first = await services.create(OLIVE, draft);
+    await services.submit(OLIVE, first.stored.request.id);
+    const again = await services.create(CAL, draft);
+    const closed = await services.closeAsDuplicate(BEA, "#2", "1");
+    expect(closed.request).toMatchObject({
+      id: again.stored.request.id,
+      status: "duplicate",
+      duplicateOf: first.stored.request.id,
+    });
+    expect(closed.version).toBe(2);
+  });
+
+  it("refuses someone neither its owner nor a builder, as if it were missing", async () => {
+    const { services } = await setup();
+    await services.create(OLIVE, draft);
+    await services.create(OLIVE, draft);
+    await expect.rejects(
+      services.closeAsDuplicate(CAL, "#2", "#1"),
+      expect.objectContaining({ code: "not_found" }),
+    );
+  });
+});
+
 describe("numbers", () => {
   it("numbers requests 1, 2, 3 in the order they are made", async () => {
     const { services } = await setup();

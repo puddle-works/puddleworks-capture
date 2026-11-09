@@ -162,6 +162,107 @@ describe("@puddleworks/capture/requests", () => {
     expect(versions.at(-1)!.attributes).toEqual(versions[0].attributes);
   });
 
+  it("logs a request for the person who asked, who then owns it and agrees it themselves", async () => {
+    const { swamp, run } = setup({ defaultAs: "intake-bot@example.com" });
+    await people(run);
+    await run("add_person", {
+      email: "intake-bot@example.com",
+      name: "Intake bot",
+    });
+    const input = {
+      title: "Stock counts",
+      description: "We count every Friday.",
+      idempotencyKey: "turn-7",
+      requester: "olive@example.com",
+    };
+
+    // Someone not in the people list is refused, and nothing is logged.
+    await expect.rejects(
+      run("create_request", { ...input, requester: "nobody@example.com" }),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "nobody@example.com isn't in Capture's people list",
+        ),
+      }),
+    );
+    expect(swamp.written.filter((r) => r.specName === "request")).toEqual([]);
+
+    const first = await run("create_request", input);
+    const again = await run("create_request", input);
+    expect(again.dataHandles.map((h) => h.name)).toEqual(
+      first.dataHandles.map((h) => h.name),
+    );
+    const logged = swamp.data(first.dataHandles[0].name)! as {
+      id: string;
+      outcomeOwnerId: string;
+      loggedBy: unknown;
+      participants: { email: string; role: string }[];
+    };
+    expect(logged.participants.map((p) => [p.email, p.role])).toEqual([
+      ["olive@example.com", "outcome_owner"],
+    ]);
+    expect(logged.loggedBy).toMatchObject({
+      email: "intake-bot@example.com",
+      name: "Intake bot",
+      sourceRef: "turn-7",
+    });
+
+    // The person who asked takes it through to agreement as themselves.
+    const olive = { as: "olive@example.com", id: logged.id };
+    const bea = { as: "bea@example.com", id: logged.id };
+    await run("submit", olive);
+    await run("join_request", bea);
+    await run("edit_specification", { ...bea, specification: goodSpec });
+    await run("propose", bea);
+    await run("agree", { ...olive, version: "1" });
+    await run("export_outcome_spec", olive);
+    expect(swamp.data(`outcome-spec-${logged.id}`)).toMatchObject({
+      agreement: { agreedBy: { email: "olive@example.com" } },
+    });
+
+    // Without requester the logging account owns it, as before.
+    const own = await run("create_request", {
+      title: "Another",
+      description: "",
+      idempotencyKey: "turn-8",
+    });
+    const bots = swamp.data(own.dataHandles[0].name)! as Record<
+      string,
+      unknown
+    >;
+    expect("loggedBy" in bots).toBe(false);
+    expect(
+      (bots.participants as { email: string; role: string }[]).map((p) => [
+        p.email,
+        p.role,
+      ]),
+    ).toEqual([["intake-bot@example.com", "outcome_owner"]]);
+
+    // A request the bot already owns is handed to the person who asked.
+    await run("transfer_ownership", {
+      id: String(bots.id),
+      to: "olive@example.com",
+    });
+    const handed = swamp.data(`request-${bots.id}`)! as {
+      participants: { email: string; role: string }[];
+      transitions: { action: string; note: string }[];
+    };
+    expect(handed.participants.map((p) => [p.email, p.role])).toEqual([
+      ["olive@example.com", "outcome_owner"],
+      ["intake-bot@example.com", "observer"],
+    ]);
+    expect(handed.transitions.map((t) => [t.action, t.note])).toEqual([
+      [
+        "transferOwnership",
+        "Outcome owner changed from Intake bot to Olive Owner.",
+      ],
+    ]);
+    await run("submit", { as: "olive@example.com", id: String(bots.id) });
+    expect(swamp.data(`request-${bots.id}`)).toMatchObject({
+      status: "discussing",
+    });
+  });
+
   it("logs a requested phrase into the draft spec's recipe", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);
@@ -543,6 +644,199 @@ describe("@puddleworks/capture/requests", () => {
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
+  });
+
+  it("uploads an edited outcome-spec file with a reason, proposing the next version to agree", async () => {
+    const dir = await Deno.makeTempDir();
+    try {
+      const swamp = new FakeSwamp();
+      const context = swamp.context(model.globalArguments.parse({}), dir);
+      const run = async (
+        method: MethodName,
+        input: Record<string, unknown> = {},
+      ) => {
+        const m = model.methods[method];
+        // deno-lint-ignore no-explicit-any
+        const out = await (m.execute as any)(m.arguments.parse(input), context);
+        swamp.checkHandles(out.dataHandles);
+        return out as { dataHandles: { name: string }[] };
+      };
+      await people(run);
+      await run("add_person", { email: "cal@example.com", name: "Cal" });
+      const created = await run("create_request", {
+        as: "olive@example.com",
+        title: "Stock counts",
+        description: "",
+      });
+      const id = String(swamp.data(created.dataHandles[0].name)!.id);
+      const olive = { as: "olive@example.com", id };
+      const bea = { as: "bea@example.com", id };
+      await run("submit", olive);
+      await run("join_request", bea);
+      await run("invite", {
+        ...olive,
+        email: "cal@example.com",
+        role: "observer",
+      });
+      await run("edit_specification", { ...bea, specification: goodSpec });
+      await run("propose", bea);
+      await run("agree", { ...olive, version: "1" });
+      const v1 = structuredClone(swamp.data(`outcome-spec-${id}`)!) as {
+        request: { id: string };
+        specification: { version: number; scope: { in: string[] } };
+      };
+      const edited = structuredClone(v1);
+      edited.specification.scope.in.push("Counts from a second stockroom");
+      await Deno.writeTextFile(`${dir}/v2.json`, JSON.stringify(edited));
+      const reason = "The owner now has a second stockroom.";
+
+      // An observer can't, and a file for another request is refused.
+      await expect.rejects(
+        run("revise_specification", {
+          as: "cal@example.com",
+          id,
+          reason,
+          outcomeSpec: "v2.json",
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining("(not_allowed)"),
+        }),
+      );
+      await expect.rejects(
+        run("revise_specification", {
+          ...bea,
+          reason,
+          outcomeSpec: JSON.stringify({
+            ...edited,
+            request: { ...edited.request, id: "someone-else" },
+          }),
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining("for request someone-else"),
+        }),
+      );
+      // A spec that can't be proposed leaves the request as it was.
+      const before = swamp.data(`request-${id}`)!;
+      await expect.rejects(
+        run("revise_specification", {
+          ...bea,
+          reason,
+          basedOnVersion: "1",
+          specification: { ...goodSpec, acceptanceCriteria: [] },
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining("isn't ready"),
+        }),
+      );
+      expect(swamp.data(`request-${id}`)).toEqual(before);
+
+      await run("revise_specification", {
+        ...bea,
+        reason,
+        outcomeSpec: "v2.json",
+      });
+      const proposed = swamp.data(`request-${id}`)! as {
+        status: string;
+        specifications: {
+          version: number;
+          status: string;
+          changeSummary?: string;
+        }[];
+      };
+      expect(proposed.status).toBe("ready_for_agreement");
+      expect(
+        proposed.specifications.map((s) => [
+          s.version,
+          s.status,
+          s.changeSummary,
+        ]),
+      ).toEqual([[1, "agreed", undefined], [2, "proposed", reason]]);
+
+      // The same v1 file again is stale now that version 2 exists.
+      await Deno.writeTextFile(`${dir}/v1.json`, JSON.stringify(v1));
+      await expect.rejects(
+        run("revise_specification", {
+          ...bea,
+          reason: "Again",
+          outcomeSpec: "v1.json",
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining("version 2 is newer"),
+        }),
+      );
+
+      await run("agree", { ...olive, version: "2" });
+      expect(swamp.data(`outcome-spec-${id}`)).toMatchObject({
+        specification: {
+          version: 2,
+          changeSummary: reason,
+          scope: {
+            in: [...goodSpec.scope.in, "Counts from a second stockroom"],
+          },
+        },
+      });
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  });
+
+  it("marks an agreed request building before any result, and only once", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    await run("submit", { id });
+    await run("join_request", { as: "bea@example.com", id });
+    await run("edit_specification", { id, specification: goodSpec });
+    await run("propose", { id });
+    const bea = { as: "bea@example.com", id };
+    await expect.rejects(
+      run("start_building", bea),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "Can't start building a request that is ready for agreement; it must be agreed.",
+        ),
+      }),
+    );
+    await run("agree", { id, version: "1" });
+    // The outcome owner asked for it; a builder does the building.
+    await expect.rejects(
+      run("start_building", { id }),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "As the outcome owner you can't start building.",
+        ),
+      }),
+    );
+    await run("start_building", bea);
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "building" });
+    expect(swamp.logs.at(-1)).toBe(
+      `Started building request #1 (${id}): now building, version 7`,
+    );
+    await expect.rejects(
+      run("start_building", bea),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "Can't start building a request that is building; it must be agreed.",
+        ),
+      }),
+    );
+    // A result for it afterwards keeps it building.
+    const agreed = swamp.data(`request-${id}`)!;
+    await run("record_build_result", {
+      result: releasingResult({
+        source: {
+          url: `http://127.0.0.1:3002/requests/${id}`,
+          version: 1,
+          specHash: (agreed.agreements as { specHash: string }[])[0].specHash,
+        },
+        published: undefined,
+      }),
+    });
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "building" });
   });
 
   it("says why a published build isn't released yet", async () => {

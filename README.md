@@ -13,6 +13,7 @@ and the epic puddle-works/puddleworks#207.
 | ------------------------------------- | ------------------------- |
 | a request                             | an `outcome-spec/v1` file |
 | a `build-result/v1` file from a build | Building, then Released   |
+| a builder starting work               | Building                  |
 
 Capture is the swamp extension `@puddleworks/capture`
 ([ADR-003](docs/adr/ADR-003-capture-swamp-extension.md)): requests and people
@@ -51,6 +52,12 @@ swamp behavior run viewer serve --input port=3002   # until Ctrl-C; open http://
 
 `appUrl` is where the page is served; exported outcome specs link to
 `<appUrl>/requests/<id>`.
+
+The page is for people to look at. `serve` renders it as HTML on the server, and
+it answers no request data as JSON, so there is no API to script against. A
+script or an agent reads requests through the methods (`get_request`,
+`list_requests`) or with `swamp data query`, where Capture's rules decide what
+the person acting may see; a draft, for one, is its outcome owner's alone.
 
 ### Who acts
 
@@ -110,6 +117,55 @@ and `requestList` data; `agree` writes `outcomeSpec`, and `export_outcome_spec`
 writes it again, or `outcomeSpecMarkdown`, recording the export without moving
 the request on. A request an older Capture saved as Exported reads as Agreed.
 
+### Revise an agreed spec, with a reason
+
+When a builder learns that an agreed spec needs to change, they can upload the
+revised spec to the same request, with a short reason, for the outcome owner to
+agree. `revise_specification` does it in one step: it revises the request if it
+is agreed, building or released, saves the next version with the reason as its
+`changeSummary`, and proposes it. The outcome owner or a builder may run it.
+
+```bash
+swamp behavior run capture revise_specification --input as=bea@example.com \
+  --input id=12 --input outcomeSpec=specs/stock-counts.outcome-spec.json \
+  --input reason="The owner now wants counts from the second stockroom too."
+```
+
+Give the spec as `outcomeSpec`, an edited `outcome-spec/v1` file for this
+request (a path, https URL, JSON text or object; only its `specification` is
+used, and its `request.id` must be this request's), or as `specification`, as
+`edit_specification` takes it. `basedOnVersion` is the version the change starts
+from, and defaults to the file's `specification.version`; if a newer version
+exists it is refused, so a change made to an old copy isn't proposed over a
+newer one. If the spec isn't ready or questions are open, the proposal is
+refused and nothing changes.
+
+The reason shows on the version, next to its agreement and in the history, with
+what changed from the version before. Once agreed, the outcome spec carries it
+as the optional `specification.changeSummary`, and the Markdown says it under
+the title.
+
+### Reads or writes
+
+A specification can also say whether the outcome only reads, or changes things,
+and what it changes, so whatever acts on it knows whether to ask first. It is
+part of what is agreed, so changing it after agreement takes a new version.
+
+```json
+"effects": {
+  "kind": "write",
+  "changes": ["deletes merged git branches", "removes git worktrees"]
+}
+```
+
+`kind` is `read` or `write`; `changes` names each change in plain words, is
+needed for `write` and must be empty for `read`. It is optional, and a spec
+without it counts as `write`, so a missing field is never taken as safe. An
+`edit_specification` that leaves it out keeps the one already there. The
+exported `outcome-spec/v1` carries it as the optional `specification.effects`,
+the Markdown has a "Reads or writes" section, and the page shows it with the
+spec.
+
 ### Record what was built
 
 Agreed means ready to build. A factory builds from the outcome spec and writes a
@@ -128,10 +184,22 @@ JSON text or, from a workflow, an object. The outcome owner or a builder may
 record one. Its `source.version` and `source.specHash` must be the agreed
 version's, so a build of something else is refused.
 
-| Status   | When                                                                                                                                                                       |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Building | The first result is recorded, or a newer one isn't released                                                                                                                |
-| Released | The latest build is published, and every example in the agreed recipe is reported as passed through puddlerouter by this request's recipe, the requested phrase among them |
+| Status   | When                                                                                                                                                            |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Building | Work is started, the first result is recorded, or a newer one isn't released                                                                                    |
+| Released | The latest build is published, and every example in the agreed recipe is reported as passed through puddlerouter by one recipe, the requested phrase among them |
+
+When work starts, before there is any result, a builder on the request can mark
+it Building:
+
+```bash
+swamp behavior run capture start_building --input as=bea@example.com --input id=1
+```
+
+It works only while the request is Agreed, and the outcome owner can't do it.
+Results recorded after that keep it Building until one is released. A factory
+that never calls it is unaffected: its first result moves the request to
+Building, or straight to Released.
 
 The latest build is the one built last (`builtAt`), whatever order the results
 come in. Released is decided by the result's optional
@@ -166,25 +234,60 @@ new version is agreed, it waits for a build of that. A Building request can be
 withdrawn; a Released one can't. The page shows the latest build: the
 repository, branch and pull request, the published version and its registry page
 (`https://swamp-club.com/extensions/<extension>`), and how each example came
-out. See [ADR-004](docs/adr/ADR-004-build-results.md).
+out. See [ADR-004](docs/adr/ADR-004-build-results.md) and
+[ADR-005](docs/adr/ADR-005-start-building.md).
 
 ### Log requests from a program
 
 `workflows/workflow-capture-log-request.yaml` is the workflow puddlerouter runs.
-It needs a `capture` behavior with `defaultAs` set, and uses `sourceRef` as the
-idempotency key:
+It needs a `capture` behavior with `defaultAs` set to the account that logs
+requests, and uses `sourceRef` as the idempotency key:
 
 ```bash
 swamp workflow run @puddleworks/capture-log-request --input title="…" \
   --input description="…" --input currentProcess="…" --input sourceRef=turn-3f9a \
+  --input requester=olive@example.com \
   --input phrase="what needs counting this week" \
   --input candidateExtensions='["@example/stock"]'
 ```
 
+`requester` is the email of the person who asked, who must be in the people
+list. They are the outcome owner, so they submit, agree and export as
+themselves, and the request records that the logging account logged it from that
+`sourceRef` (the page shows it in the history). The logging account isn't a
+participant. A requester who isn't in the people list is refused, and nothing is
+logged. Without `requester` the logging account owns the request, as before. The
+same `sourceRef` from the same logging account still gives back the same
+request, whoever it was logged for.
+
 `phrase` and `candidateExtensions` are optional; given, they start the draft
 spec's recipe.
 
+A request the logging account already owns can be handed to the person who
+asked. Only the outcome owner can do it, so act as the logging account:
+
+```bash
+swamp behavior run capture transfer_ownership --input as=intake-bot@example.com \
+  --input id=12 --input to=olive@example.com
+```
+
+The new owner takes over every outcome owner's step, the old one stays on as an
+observer, and the history records the change. It works while the request is a
+draft or open.
+
 It replaces `@puddleworks/capture-client`, which called the Node app's API.
+
+A tool often logs the same need more than once, and each time it is a new draft.
+Close a repeat with `close_as_duplicate`, naming the request it repeats with
+`of`. The outcome owner or any builder can, while the repeat is a draft or still
+open, and the request it repeats must not be closed. The repeat moves to
+Duplicate, and the page shows the other request as "asked N times", linked to
+each repeat:
+
+```bash
+swamp behavior run capture close_as_duplicate --input id=14 --input of=9 \
+  --input as=bea@example.com
+```
 
 ### Have an agent review the spec
 
@@ -242,10 +345,12 @@ deno fmt --check
 swamp extension fmt manifest.yaml --check
 ```
 
-`web/src/` is the page: Preact, built by `web/build.ts` into
-`extensions/models/_lib/web/assets.ts`. A test fails while that file is older
-than its source. The domain rules are in `extensions/models/_lib/domain/`, pure
-TypeScript with no I/O.
+`extensions/models/_lib/web/page/` is the page: Preact components the server
+renders to HTML. `web/src/` holds its shell, styles, icon and a small script
+(opening "Show all", and reading the page again when the data changes), built by
+`web/build.ts` into `extensions/models/_lib/web/assets.ts`. A test fails while
+that file is older than its source. The domain rules are in
+`extensions/models/_lib/domain/`, pure TypeScript with no I/O.
 
 To try the extension from this checkout without publishing, in another swamp
 repository: `swamp extension source add <path to this checkout>`.

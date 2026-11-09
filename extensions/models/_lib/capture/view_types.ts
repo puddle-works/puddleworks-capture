@@ -1,9 +1,9 @@
-// What the viewer page is sent. Types only, shared by the server and the page
-// (web/src), so the two can't drift apart.
+// What the viewer renders its page from. Types only.
 import type {
   BuildResultRecord,
   ExampleCheck,
   ExportRecord,
+  LoggedBy,
   Message,
   Participant,
   RequestStatus,
@@ -17,6 +17,13 @@ export type { OldHistory, RequestStatus };
 export interface PersonRef {
   userId: string;
   name: string;
+}
+
+/** Another request, as a link to it shows it. */
+export interface RequestRef {
+  id: string;
+  number: number | null;
+  title: string;
 }
 
 /** A request in the list. */
@@ -33,6 +40,10 @@ export interface WebSummary {
   specificationVersion: number | null;
   /** Brought in from the old Puddleworks app. */
   imported: boolean;
+  /** The request this one repeats, once closed as its duplicate. */
+  duplicateOf: RequestRef | null;
+  /** The requests closed as repeats of this one: it was asked this many more times. */
+  duplicates: RequestRef[];
   createdAt: string;
   updatedAt: string;
 }
@@ -53,6 +64,8 @@ export interface WebRequest extends WebSummary {
   currentProcess: string;
   /** The phrase the recipe must answer as asked, or null if none was given. */
   requestedPhrase: string | null;
+  /** Who logged it for the outcome owner, and where from; null if they raised it. */
+  loggedBy: LoggedBy | null;
   closedReason: string | null;
   participants: Participant[];
   messages: Message[];

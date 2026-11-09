@@ -1,7 +1,8 @@
 // The viewer's HTTP handler: read-only, local only, and strict about who may
 // call it.
 import { describe, expect, it } from "../domain/test_bdd.ts";
-import { agreedRequest } from "../domain/test_fixtures.ts";
+import { agreedRequest, builder } from "../domain/test_fixtures.ts";
+import { startBuilding } from "../domain/index.ts";
 import { toWebRequest, toWebSummary } from "../capture/views.ts";
 import { handleViewerRequest, type ViewerDeps } from "./server.ts";
 
@@ -22,7 +23,8 @@ function deps(extra: Partial<ViewerDeps> = {}): ViewerDeps {
     assets: {
       "index.html": {
         type: "text/html; charset=utf-8",
-        text: "<!doctype html><title>Capture</title>",
+        text:
+          '<!doctype html><title>Capture</title><div id="root"></div><script src="/app.js"></script>',
       },
       "app.js": {
         type: "text/javascript; charset=utf-8",
@@ -53,16 +55,59 @@ function get(
 }
 
 describe("viewer server", () => {
-  it("serves the page on / and on each request's own address", async () => {
-    for (const path of ["/", "/requests/r-1"]) {
-      const res = await handleViewerRequest(get(path), deps());
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
-      expect(res.headers.get("content-security-policy")).toContain(
-        "default-src 'self'",
-      );
-      expect(await res.text()).toContain("<title>Capture</title>");
-    }
+  it("renders the list on / and each request on its own address, as HTML", async () => {
+    const list = await handleViewerRequest(get("/"), deps());
+    expect(list.status).toBe(200);
+    expect(list.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(list.headers.get("content-security-policy")).toContain(
+      "default-src 'self'",
+    );
+    const listHtml = await list.text();
+    expect(listHtml).toContain("<title>Requests — Capture</title>");
+    expect(listHtml).toContain('<a href="/requests/r-1">#1 Stock counts</a>');
+    const one = await (await handleViewerRequest(get("/requests/r-1"), deps()))
+      .text();
+    expect(one).toContain("<title>#1 Stock counts — Capture</title>");
+    expect(one).toContain("We count stock every Friday.");
+    expect(one).toContain('<script src="/app.js"></script>');
+  });
+
+  it("shows the Build section once building has started, with no result yet", async () => {
+    const page = async (request: typeof stored.request) =>
+      await (await handleViewerRequest(
+        get("/requests/r-1"),
+        deps({ request: () => toWebRequest({ ...stored, request }) }),
+      )).text();
+    expect(await page(agreedRequest())).not.toContain("build-heading");
+    expect(
+      await page(
+        startBuilding(agreedRequest(), builder, "2026-10-23T13:00:00.000Z"),
+      ),
+    ).toContain("Work has started. No build result has been recorded yet.");
+  });
+
+  it("answers a request there is no record of with a page saying so", async () => {
+    const res = await handleViewerRequest(get("/requests/nope"), deps());
+    expect(res.status).toBe(404);
+    expect(res.headers.get("content-type")).toBe("text/html; charset=utf-8");
+    expect(await res.text()).toContain("There is no such request.");
+  });
+
+  it("escapes what people wrote", async () => {
+    const res = await handleViewerRequest(
+      get("/requests/r-1"),
+      deps({
+        request: () => ({
+          ...toWebRequest(stored),
+          title: "<script>alert(1)</script>",
+        }),
+      }),
+    );
+    const html = await res.text();
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain(
+      "<title>#1 &lt;script&gt;alert(1)&lt;/script&gt; — Capture</title>",
+    );
   });
 
   it("serves the page's files, text and binary", async () => {
@@ -75,23 +120,29 @@ describe("viewer server", () => {
     );
   });
 
-  it("answers the list and one request as JSON", async () => {
-    const list = await (await handleViewerRequest(get("/api/requests"), deps()))
-      .json();
-    expect(list.requests[0]).toMatchObject({ id: "r-1", status: "agreed" });
-    const one = await handleViewerRequest(get("/api/requests/r-1"), deps());
-    expect(await one.json()).toMatchObject({
-      id: "r-1",
-      specifications: [{ version: 1 }],
-    });
-    expect(
-      (await handleViewerRequest(get("/api/requests/nope"), deps())).status,
-    ).toBe(404);
+  it("serves no request data as JSON: the old API routes are gone", async () => {
+    for (
+      const path of [
+        "/api/requests",
+        "/api/requests/r-1",
+        "/api/requests/1",
+        "/api/events",
+        "/index.html",
+      ]
+    ) {
+      const res = await handleViewerRequest(
+        get(path, { accept: "application/json" }),
+        deps(),
+      );
+      expect(res.status).toBe(404);
+      expect(res.headers.get("content-type")).not.toContain("json");
+      expect(await res.text()).not.toContain("Stock counts");
+    }
   });
 
   it("only reads", async () => {
     const res = await handleViewerRequest(
-      get("/api/requests", {}, "POST"),
+      get("/", {}, "POST"),
       deps(),
     );
     expect(res.status).toBe(405);
@@ -105,14 +156,14 @@ describe("viewer server", () => {
     ).toBe(403);
     expect(
       (await handleViewerRequest(
-        get("/api/requests", { origin: "http://evil.example" }),
+        get("/", { origin: "http://evil.example" }),
         deps(),
       )).status,
     )
       .toBe(403);
     expect(
       (await handleViewerRequest(
-        get("/api/requests", { "sec-fetch-site": "cross-site" }),
+        get("/events", { "sec-fetch-site": "cross-site" }),
         deps(),
       )).status,
     )
@@ -135,15 +186,15 @@ describe("viewer server", () => {
       (await handleViewerRequest(get("/requests/r-1", link), deps())).status,
     ).toBe(200);
     expect(
-      (await handleViewerRequest(get("/api/requests", link), deps())).status,
+      (await handleViewerRequest(get("/events", link), deps())).status,
     ).toBe(403);
   });
 
-  it("streams a change event to the page", async () => {
+  it("streams that something changed, and nothing about what", async () => {
     let send: (e: { type: "changed" }) => void = () => {};
     const abort = new AbortController();
     const res = await handleViewerRequest(
-      get("/api/events"),
+      get("/events"),
       deps({
         signal: abort.signal,
         events: {
@@ -164,7 +215,7 @@ describe("viewer server", () => {
     );
     send({ type: "changed" });
     expect(decoder.decode((await reader.read()).value)).toBe(
-      `data: {"type":"changed"}\n\n`,
+      `data: changed\n\n`,
     );
     abort.abort();
     expect((await reader.read()).done).toBe(true);

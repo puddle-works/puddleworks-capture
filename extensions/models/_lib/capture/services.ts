@@ -5,6 +5,7 @@
 import {
   agree,
   canRead,
+  closeAsDuplicate,
   createRequest,
   decline,
   DomainError,
@@ -17,6 +18,7 @@ import {
   type Message,
   type NewRequest,
   type OutcomeSpecV1,
+  OutcomeSpecV1Schema,
   parseBuildResult,
   type Participant,
   type Person,
@@ -35,13 +37,17 @@ import {
   reviewPrompt,
   reviewVersion,
   revise,
+  reviseSpecification,
   type Role,
   roleOf,
   specHashInput,
   type SpecificationContent,
+  SpecificationContentSchema,
+  startBuilding,
   submit,
   toMarkdown,
   toOutcomeSpecV1,
+  transferOwnership,
   upgradeRequest,
   withdraw,
 } from "../domain/index.ts";
@@ -217,12 +223,19 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
 
     actor,
 
+    /**
+     * Logs a request. `requester`, when given, is the person who asked: they
+     * own it, and it records that `as` logged it for them. The idempotency
+     * key is still the logger's, so a retry gives the same request.
+     */
     async create(
       as: string,
       input: Omit<NewRequest, "id">,
       idempotencyKey?: string,
+      requester?: string,
     ): Promise<{ stored: Stored; created: boolean }> {
       const person = await actor(as);
+      const owner = requester ? await actor(requester) : person;
       const { next } = await numberRequests();
       if (idempotencyKey !== undefined) {
         const earlier = (await store.allRequests()).find((s) =>
@@ -233,7 +246,17 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         if (earlier) return { stored: earlier, created: false };
       }
       const stored: Stored = {
-        request: createRequest({ ...input, id: newId() }, person, clock()),
+        request: createRequest(
+          { ...input, id: newId() },
+          owner,
+          clock(),
+          {
+            userId: person.userId,
+            name: person.name,
+            email: person.email,
+            sourceRef: idempotencyKey ?? null,
+          },
+        ),
         version: 1,
         idempotencyKeys: idempotencyKey === undefined
           ? []
@@ -287,14 +310,61 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       mutate(as, id, (r, p, at) => submit(r, p, at)),
     withdraw: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => withdraw(r, p, reason, at)),
+    startBuilding: (as: string, id: string) =>
+      mutate(as, id, (r, p, at) => startBuilding(r, p, at)),
     decline: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => decline(r, p, reason, at)),
+
+    /** Any builder may close a repeat, including a draft they can't read otherwise. */
+    async closeAsDuplicate(
+      as: string,
+      id: string,
+      of: string,
+    ): Promise<Stored> {
+      const person = await actor(as);
+      const visible = async (ref: string) => {
+        const found = await find(ref);
+        if (found && (person.isBuilder || canRead(found.request, person))) {
+          return found;
+        }
+        throw new DomainError(
+          "not_found",
+          `There is no request ${ref}, or it isn't shared with you.`,
+        );
+      };
+      const stored = await visible(id);
+      const target = await visible(of);
+      const saved = {
+        ...stored,
+        request: closeAsDuplicate(
+          stored.request,
+          target.request,
+          person,
+          clock(),
+        ),
+        version: stored.version + 1,
+      };
+      await store.saveRequest(saved);
+      return saved;
+    },
     propose: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => propose(r, p, at)),
     requestChanges: (as: string, id: string, note: string) =>
       mutate(as, id, (r, p, at) => requestChanges(r, p, note, at)),
     revise: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => revise(r, p, at)),
+    transferOwnership: async (as: string, id: string, email: string) => {
+      const to = await personByEmail(email);
+      if (!to) {
+        // Checked after the owner can see the request, so the answer leaks nothing.
+        await load(await actor(as), id);
+        throw new DomainError(
+          "not_found",
+          `${email} isn't in Capture's people list yet. Add them with add_person, then hand the request to them.`,
+        );
+      }
+      return mutate(as, id, (r, p, at) => transferOwnership(r, p, to, at));
+    },
     join: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => joinAsBuilder(r, p, at)),
 
@@ -390,6 +460,65 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
           );
         }
         return editSpecification(r, p, content, basedOnMessageIds, at);
+      }),
+
+    /**
+     * A revised spec and why, proposed in one step. The spec is `content`, or
+     * the `specification` part of an outcome-spec/v1 document `outcomeSpec`
+     * for this request; `basedOnVersion` defaults to that document's version.
+     */
+    reviseSpecification: (
+      as: string,
+      id: string,
+      { content, outcomeSpec, reason, basedOnVersion }: {
+        content?: SpecificationContent;
+        outcomeSpec?: unknown;
+        reason: string;
+        basedOnVersion?: number;
+      },
+    ) =>
+      mutate(as, id, (r, p, at) => {
+        if ((content === undefined) === (outcomeSpec === undefined)) {
+          throw new DomainError(
+            "invalid_input",
+            "Give the revised spec as either specification or outcomeSpec, not both.",
+          );
+        }
+        let spec = content;
+        let from = basedOnVersion;
+        if (outcomeSpec !== undefined) {
+          const doc = OutcomeSpecV1Schema.safeParse(outcomeSpec);
+          if (!doc.success) {
+            throw new DomainError(
+              "invalid_input",
+              `That isn't an outcome-spec/v1 document: ${
+                doc.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
+                  .join(" ")
+              }`,
+            );
+          }
+          if (doc.data.request.id !== r.id) {
+            throw new DomainError(
+              "invalid_input",
+              `That outcome spec is for request ${doc.data.request.id}, not this one (${r.id}).`,
+            );
+          }
+          // Only the content: its version, summary and agreement stay behind.
+          spec = SpecificationContentSchema.parse(doc.data.specification);
+          from ??= doc.data.specification.version;
+        }
+        if (from === undefined) {
+          throw new DomainError(
+            "invalid_input",
+            "Say which version the change starts from, with basedOnVersion.",
+          );
+        }
+        return reviseSpecification(
+          r,
+          p,
+          { content: spec!, reason, basedOnVersion: from },
+          at,
+        );
       }),
 
     /** The prompt for a reviewer of the spec up for agreement, and its version. */

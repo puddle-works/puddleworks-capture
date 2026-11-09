@@ -132,6 +132,7 @@ Check:
 6. One reading: would ten builders understand the same outcome? Flag anything that could reasonably mean two different things.
 7. Assumptions: are they stated, and would a wrong one change what is built?
 8. Recipe: could someone who wasn't there tell, for each example phrase, whether an answer matches what the example says it shows? Does the recipe say what to answer when there is nothing to show?
+9. Reads or writes: does it say whether the outcome only reads or also changes things? If it changes things, is each change named, and does anything in the spec change something it doesn't name?
 
 Answer with one JSON object and nothing else:
 
@@ -181,6 +182,15 @@ ${bullets((c.recipe?.examples ?? []).map((e) => `${e.phrase} → ${e.answer}`))}
 
 When there is nothing to show:
 ${c.recipe?.whenEmpty || "Not said."}
+
+Reads or writes:
+${
+    !c.effects
+      ? "Not said."
+      : c.effects.kind === "read"
+      ? "Only reads."
+      : `Changes things:\n${bullets(c.effects.changes)}`
+  }
 `;
 }
 

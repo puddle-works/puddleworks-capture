@@ -10,11 +10,13 @@ export const REQUEST_STATUSES = [
   "released",
   "withdrawn",
   "declined",
+  "duplicate",
 ] as const;
 export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 export const TERMINAL_STATUSES: readonly RequestStatus[] = [
   "withdrawn",
   "declined",
+  "duplicate",
 ];
 
 export const ROLES = [
@@ -97,6 +99,35 @@ export const RecipeSchema = z.object({
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
 
+export const EFFECT_KINDS = ["read", "write"] as const;
+
+/**
+ * Whether the agreed outcome only reads, or also changes things, and what it
+ * changes, in plain words. It says what it may change, not how. A spec with
+ * none counts as `write` for anyone acting on it, so a missing field is never
+ * taken as safe.
+ */
+export const EffectsSchema = z.object({
+  kind: z.enum(EFFECT_KINDS),
+  changes: z.array(z.string().trim().min(1).max(500)).max(50).default([]),
+}).superRefine(({ kind, changes }, ctx) => {
+  if (kind === "write" && changes.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["changes"],
+      message: "Say what it changes: a write outcome needs at least one.",
+    });
+  }
+  if (kind === "read" && changes.length > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["changes"],
+      message: "A read outcome changes nothing, so it has no changes.",
+    });
+  }
+});
+export type Effects = z.infer<typeof EffectsSchema>;
+
 export const SpecificationContentSchema = z.object({
   problemStatement: text,
   desiredOutcome: text,
@@ -110,6 +141,8 @@ export const SpecificationContentSchema = z.object({
     .max(100),
   /** Every spec needs one to be proposed. Specs saved before recipes have none. */
   recipe: RecipeSchema.optional(),
+  /** Whether it reads or writes. Optional: none counts as write. */
+  effects: EffectsSchema.optional(),
 });
 export type SpecificationContent = z.infer<typeof SpecificationContentSchema>;
 
@@ -127,6 +160,8 @@ export interface SpecificationVersion {
   status: SpecStatus;
   content: SpecificationContent;
   basedOnMessageIds: string[];
+  /** Why it changed from the version before, when it was uploaded as a revision. */
+  changeSummary?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -170,6 +205,15 @@ export interface ExampleCheck {
   router: NonNullable<BuildResultV1["examples"]>[number]["router"] | null;
 }
 
+/** Someone who logged a request for the person who asked. Not a participant. */
+export interface LoggedBy {
+  userId: string;
+  name: string;
+  email: string;
+  /** Where it came from, such as a router turn id; null if not said. */
+  sourceRef: string | null;
+}
+
 export interface Transition {
   from: RequestStatus;
   to: RequestStatus;
@@ -194,8 +238,15 @@ export interface Request {
    */
   requestedPhrase?: string;
   outcomeOwnerId: string;
+  /**
+   * Who logged it for the outcome owner, such as a router's bot account, and
+   * where from. Absent when the outcome owner raised it themselves.
+   */
+  loggedBy?: LoggedBy;
   status: RequestStatus;
   closedReason: string | null;
+  /** The id of the request this one repeats, once closed as its duplicate. */
+  duplicateOf?: string;
   participants: Participant[];
   messages: Message[];
   specifications: SpecificationVersion[];

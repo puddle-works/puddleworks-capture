@@ -4,7 +4,9 @@ description: >-
   Log a request in Capture as a draft. sourceRef is the idempotency key, so
   logging the same thing twice gives one request. Needs a
   @puddleworks/capture/requests behavior named capture, with defaultAs set to
-  the person the requests are logged for.
+  the account that logs requests. Pass requester, the person who asked, so
+  they own the request and the logging account is only recorded as having
+  logged it; without it the logging account owns it.
 version: 1
 tags:
   maxReruns: "3"
@@ -40,6 +42,12 @@ inputs:
       description: >-
         Where the request came from, such as a puddlerouter turn id. The same
         sourceRef always gives the same request.
+    requester:
+      type: string
+      description: >-
+        The email of the person who asked, who must be in Capture's people
+        list. They own the request. Blank: the logging account owns it.
+      default: ""
   required: [title, description, sourceRef]
 jobs:
   - name: main
@@ -56,3 +64,4 @@ jobs:
             phrase: ${{ inputs.phrase }}
             candidateExtensions: ${{ inputs.candidateExtensions }}
             idempotencyKey: ${{ inputs.sourceRef }}
+            requester: ${{ inputs.requester }}

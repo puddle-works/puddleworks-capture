@@ -92,8 +92,9 @@ export function captureSource(
     },
 
     overview() {
-      const summaries = [...requests.values()]
-        .map(toWebSummary)
+      const all = [...requests.values()];
+      const summaries = all
+        .map((stored) => toWebSummary(stored, all))
         .sort((a, b) =>
           b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id)
         );
@@ -105,7 +106,7 @@ export function captureSource(
       const stored = number === undefined
         ? requests.get(ref)
         : [...requests.values()].find((s) => s.number === Number(number));
-      return stored && toWebRequest(stored);
+      return stored && toWebRequest(stored, [...requests.values()]);
     },
   };
 }

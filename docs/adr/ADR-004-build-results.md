@@ -2,11 +2,14 @@
 
 ## Status: Accepted (2026-10-29)
 
+Amended by [ADR-005](ADR-005-start-building.md): `start_building` also moves an
+agreed request to Building, before any result.
+
 Amended (2026-11-09, issue #27): a pass counts only with evidence that
-puddlerouter answered the phrase with this request's recipe. Each example
-carries `recipeId` and `router: { testedAt, version, outcome, source }`,
-optional build-result/v1 fields agreed with the Factory (factory#78). Released
-needs the same `recipeId` on every example and `router.version` equal to
+puddlerouter answered the phrase, all with one recipe. Each example carries
+`recipeId` and `router: { testedAt, version, outcome, source }`, optional
+build-result/v1 fields agreed with the Factory (factory#78). Released needs the
+same `recipeId` on every example and `router.version` equal to
 `published.version`. `router.source` is shown, not checked, so a recipe built
 for another request can answer this one (factory#55's reused recipe).
 

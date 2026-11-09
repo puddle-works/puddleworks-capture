@@ -14,6 +14,7 @@ import {
   type Request,
   revise,
   type SpecificationContent,
+  startBuilding,
   upgradeRequest,
   withdraw,
 } from "./index.ts";
@@ -229,6 +230,100 @@ describe("recording a build result", () => {
   });
 });
 
+describe("starting to build before any result", () => {
+  it("moves an agreed request to building, recording who and when", () => {
+    const r = startBuilding(agreedRequest(), builder, T3);
+    expect(r.status).toBe("building");
+    expect(r.updatedAt).toBe(T3);
+    expect(r.buildResults).toEqual([]);
+    expect(currentBuild(r)).toBe(undefined);
+    expect(r.transitions.at(-1)).toMatchObject({
+      from: "agreed",
+      to: "building",
+      action: "build",
+      by: builder.userId,
+      at: T3,
+    });
+  });
+
+  it("lets only a builder start, not the outcome owner, a reviewer or an outsider", () => {
+    const r = agreedRequest();
+    expect(() => startBuilding(r, owner, T3)).toThrowError(
+      expect.objectContaining({
+        code: "not_allowed",
+        message: "As the outcome owner you can't start building.",
+      }),
+    );
+    const withReviewer = {
+      ...r,
+      participants: [...r.participants, {
+        userId: reviewer.userId,
+        name: reviewer.name,
+        email: reviewer.email,
+        role: "reviewer" as const,
+        invitedBy: owner.userId,
+        joinedAt: T2,
+      }],
+    };
+    expect(() => startBuilding(withReviewer, reviewer, T3)).toThrowError(
+      expect.objectContaining({
+        code: "not_allowed",
+        message: "As a reviewer you can't start building.",
+      }),
+    );
+    expect(() => startBuilding(r, reviewer, T3)).toThrowError(
+      expect.objectContaining({ code: "not_allowed" }),
+    );
+  });
+
+  it("refuses a request that isn't agreed, including one already building or released", () => {
+    expect(() => startBuilding(discussingRequest(), builder, T3))
+      .toThrowError(expect.objectContaining({
+        code: "invalid_state",
+        message:
+          "Can't start building a request that is discussing; it must be agreed.",
+      }));
+    const building = startBuilding(agreedRequest(), builder, T3);
+    expect(() => startBuilding(building, builder, T3)).toThrowError(
+      expect.objectContaining({ code: "invalid_state" }),
+    );
+    const released = recordBuildResult(
+      agreedRequest(),
+      builder,
+      releasingResult(),
+      T3,
+    );
+    expect(() => startBuilding(released, builder, T3)).toThrowError(
+      expect.objectContaining({ code: "invalid_state" }),
+    );
+  });
+
+  it("keeps building while an unreleased result comes in, with no second transition", () => {
+    let r = startBuilding(agreedRequest(), builder, T3);
+    r = recordBuildResult(r, builder, buildResult(), T3);
+    expect(r.status).toBe("building");
+    expect(r.buildResults).toHaveLength(1);
+    expect(r.transitions.filter((t) => t.action === "build")).toHaveLength(1);
+  });
+
+  it("is released by a passing result, from building", () => {
+    let r = startBuilding(agreedRequest(), builder, T3);
+    r = recordBuildResult(r, builder, releasingResult(), T3);
+    expect(r.status).toBe("released");
+    expect(r.transitions.map((t) => `${t.from}->${t.to}:${t.action}`).slice(-2))
+      .toEqual(["agreed->building:build", "building->released:release"]);
+  });
+
+  it("can be withdrawn or revised, and starts again once the new version is agreed", () => {
+    const r = startBuilding(agreedRequest(), builder, T3);
+    expect(withdraw(r, owner, "", T3).status).toBe("withdrawn");
+    let revised = revise(r, owner, T3);
+    revised = propose(revised, builder, T3);
+    revised = agree(revised, owner, { version: 2, specHash: "hash-v2" }, T3);
+    expect(startBuilding(revised, builder, T3).status).toBe("building");
+  });
+});
+
 describe("released only when every example passes", () => {
   it("checks each example in the agreed spec against what was reported", () => {
     const r = agreedWith();
@@ -388,6 +483,17 @@ describe("after a build", () => {
       "message",
       "invite",
     ]);
+  });
+
+  it("offers a builder starting to build only while agreed", () => {
+    const agreed = agreedRequest();
+    expect(allowedActions(agreed, builder)).toContain("startBuilding");
+    expect(allowedActions(agreed, owner)).not.toContain("startBuilding");
+    const building = startBuilding(agreed, builder, T3);
+    expect(allowedActions(building, builder)).not.toContain("startBuilding");
+    expect(allowedActions(discussingRequest(), builder)).not.toContain(
+      "startBuilding",
+    );
   });
 
   it("reads a request saved before build results as having none", () => {

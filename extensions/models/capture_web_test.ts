@@ -24,7 +24,7 @@ describe("@puddleworks/capture/web", () => {
     });
   });
 
-  it("serves the page and the requests until the signal aborts", async () => {
+  it("serves the page, rendered from swamp data, until the signal aborts", async () => {
     const abort = new AbortController();
     const listening = Promise.withResolvers<number>();
     const record = {
@@ -54,11 +54,15 @@ describe("@puddleworks/capture/web", () => {
       VIEWER_ASSETS,
     );
     const port = await listening.promise;
-    const page = await fetch(`http://127.0.0.1:${port}/requests/r-1`);
-    expect(await page.text()).toContain("<title>Capture</title>");
-    const list = await (await fetch(`http://127.0.0.1:${port}/api/requests`))
-      .json();
-    expect(list.requests[0].id).toBe("r-1");
+    const page = await (await fetch(`http://127.0.0.1:${port}/requests/1`))
+      .text();
+    expect(page).toContain("<title>#1 Stock counts — Capture</title>");
+    expect(page).toContain("We count stock every Friday.");
+    const list = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+    expect(list).toContain('href="/requests/r-1"');
+    const api = await fetch(`http://127.0.0.1:${port}/api/requests`);
+    expect(api.status).toBe(404);
+    await api.body?.cancel();
     abort.abort();
     expect(await served).toEqual({ dataHandles: [] });
   });

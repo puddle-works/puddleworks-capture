@@ -130,10 +130,34 @@ export function releaseProblems(
 }
 
 /**
+ * Starts building an agreed request, before any build result: it moves to
+ * building, so the person who asked can see work has begun. Results recorded
+ * after that keep it there until one is released. A released request isn't
+ * started again; a newer unreleased result takes it back to building.
+ */
+export function startBuilding(
+  request: Request,
+  actor: Person,
+  at: string,
+): Request {
+  requirePermission(request, actor, "startBuilding");
+  if (request.status !== "agreed") {
+    throw new DomainError(
+      "invalid_state",
+      `Can't start building a request that is ${
+        statusWords(request.status)
+      }; it must be agreed.`,
+    );
+  }
+  return applyTransition(request, actor, "build", at);
+}
+
+/**
  * Records what a build of the agreed version produced. The first moves the
- * request to building; it is released once the current build is published
- * and every example in the agreed recipe passed. A newer build that isn't
- * takes it back to building. The same result twice changes nothing.
+ * request to building, unless it already was; it is released once the
+ * current build is published and every example in the agreed recipe passed. A
+ * newer build that isn't takes it back to building. The same result twice
+ * changes nothing.
  */
 export function recordBuildResult(
   request: Request,

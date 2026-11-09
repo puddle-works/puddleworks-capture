@@ -1,10 +1,17 @@
 import { DomainError } from "./errors.ts";
-import { applyTransition, checkTransition, isClosed } from "./lifecycle.ts";
 import {
+  applyTransition,
+  checkTransition,
+  isClosed,
+  statusWords,
+} from "./lifecycle.ts";
+import {
+  type LoggedBy,
   type NewRequest,
   NewRequestSchema,
   type Person,
   type Request,
+  type RequestStatus,
   type Role,
 } from "./model.ts";
 import { participantOf, requirePermission } from "./permissions.ts";
@@ -13,11 +20,13 @@ import { startingSpec } from "./recipe.ts";
 /**
  * A draft owned by `owner`. A phrase, or the extensions a router found,
  * start the draft spec's recipe; the phrase becomes the requested phrase.
+ * `loggedBy` is who logged it for the owner, when that was someone else.
  */
 export function createRequest(
   input: NewRequest,
   owner: Person,
   at: string,
+  loggedBy?: LoggedBy,
 ): Request {
   const parsed = NewRequestSchema.safeParse(input);
   if (!parsed.success) {
@@ -34,6 +43,7 @@ export function createRequest(
     ...fields,
     ...(requestedPhrase !== undefined && { requestedPhrase }),
     outcomeOwnerId: owner.userId,
+    ...(loggedBy && loggedBy.userId !== owner.userId && { loggedBy }),
     status: "draft",
     closedReason: null,
     participants: [
@@ -193,6 +203,70 @@ export function decline(
   };
 }
 
+/** A draft, or a request still open: what can be closed as a duplicate. */
+export const DUPLICATE_FROM: readonly RequestStatus[] = [
+  "draft",
+  "discussing",
+  "ready_for_agreement",
+  "agreed",
+  "building",
+];
+
+/**
+ * Closes a request that asks for what `of` already asks for. Its outcome
+ * owner or any builder can, so a builder can close repeats a tool logged as
+ * drafts. A request can't repeat itself, or a closed request.
+ */
+export function closeAsDuplicate(
+  request: Request,
+  of: Request,
+  actor: Person,
+  at: string,
+): Request {
+  if (actor.userId !== request.outcomeOwnerId && !actor.isBuilder) {
+    throw new DomainError(
+      "not_allowed",
+      "Only the outcome owner or a builder can close a request as a duplicate.",
+    );
+  }
+  if (!DUPLICATE_FROM.includes(request.status)) {
+    throw new DomainError(
+      "invalid_state",
+      `Can't close a request that is ${
+        statusWords(request.status)
+      } as a duplicate; it must be a draft or still open.`,
+    );
+  }
+  if (of.id === request.id) {
+    throw new DomainError(
+      "invalid_input",
+      "A request can't be a duplicate of itself.",
+    );
+  }
+  if (isClosed(of)) {
+    throw new DomainError(
+      "invalid_state",
+      `Can't close it as a duplicate of a request that is ${
+        statusWords(of.status)
+      }; name one that is still open.`,
+    );
+  }
+  return {
+    ...request,
+    status: "duplicate",
+    duplicateOf: of.id,
+    updatedAt: at,
+    transitions: [...request.transitions, {
+      from: request.status,
+      to: "duplicate",
+      action: "closeAsDuplicate",
+      by: actor.userId,
+      at,
+      note: null,
+    }],
+  };
+}
+
 export function requireOpen(request: Request, doing: string): void {
   if (request.status === "draft") {
     throw new DomainError(
@@ -308,5 +382,72 @@ export function removeParticipant(
     ...request,
     updatedAt: at,
     participants: request.participants.filter((p) => p.userId !== userId),
+  };
+}
+
+/**
+ * The outcome owner hands the request to someone else in the people list,
+ * such as the person who asked for a request a bot logged. The new owner
+ * takes over every outcome owner's step; the old one stays on as an
+ * observer, so they can still read it, until someone takes them off.
+ */
+export function transferOwnership(
+  request: Request,
+  actor: Person,
+  to: Person,
+  at: string,
+): Request {
+  if (!participantOf(request, actor.userId)) {
+    throw new DomainError("not_allowed", "You aren't part of this request.");
+  }
+  if (actor.userId !== request.outcomeOwnerId) {
+    throw new DomainError(
+      "not_allowed",
+      "Only the outcome owner can hand the request to someone else.",
+    );
+  }
+  if (isClosed(request)) {
+    throw new DomainError(
+      "invalid_state",
+      `The request is ${request.status}, so its outcome owner can't change.`,
+    );
+  }
+  if (to.userId === request.outcomeOwnerId) {
+    throw new DomainError(
+      "invalid_input",
+      `${to.name} is already the outcome owner.`,
+    );
+  }
+  const from = participantOf(request, request.outcomeOwnerId)!;
+  const others = request.participants.filter((p) =>
+    p.userId !== from.userId && p.userId !== to.userId
+  );
+  const already = participantOf(request, to.userId);
+  return {
+    ...request,
+    outcomeOwnerId: to.userId,
+    updatedAt: at,
+    participants: [
+      {
+        userId: to.userId,
+        name: already?.name ?? to.name,
+        email: already?.email ?? to.email,
+        role: "outcome_owner",
+        invitedBy: already ? already.invitedBy : actor.userId,
+        joinedAt: already?.joinedAt ?? at,
+      },
+      ...others,
+      { ...from, role: "observer" },
+    ],
+    transitions: [...request.transitions, {
+      from: request.status,
+      to: request.status,
+      action: "transferOwnership",
+      by: actor.userId,
+      at,
+      note: `Outcome owner changed from ${from.name} to ${
+        already?.name ?? to.name
+      }.`,
+    }],
   };
 }
