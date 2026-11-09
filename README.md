@@ -52,6 +52,12 @@ swamp behavior run viewer serve --input port=3002   # until Ctrl-C; open http://
 `appUrl` is where the page is served; exported outcome specs link to
 `<appUrl>/requests/<id>`.
 
+The page is for people to look at. `serve` renders it as HTML on the server, and
+it answers no request data as JSON, so there is no API to script against. A
+script or an agent reads requests through the methods (`get_request`,
+`list_requests`) or with `swamp data query`, where Capture's rules decide what
+the person acting may see; a draft, for one, is its outcome owner's alone.
+
 ### Who acts
 
 Every method acts as one person in the people list: `--input as=<email>`, or the
@@ -234,10 +240,12 @@ deno fmt --check
 swamp extension fmt manifest.yaml --check
 ```
 
-`web/src/` is the page: Preact, built by `web/build.ts` into
-`extensions/models/_lib/web/assets.ts`. A test fails while that file is older
-than its source. The domain rules are in `extensions/models/_lib/domain/`, pure
-TypeScript with no I/O.
+`extensions/models/_lib/web/page/` is the page: Preact components the server
+renders to HTML. `web/src/` holds its shell, styles, icon and a small script
+(opening "Show all", and reading the page again when the data changes), built by
+`web/build.ts` into `extensions/models/_lib/web/assets.ts`. A test fails while
+that file is older than its source. The domain rules are in
+`extensions/models/_lib/domain/`, pure TypeScript with no I/O.
 
 To try the extension from this checkout without publishing, in another swamp
 repository: `swamp extension source add <path to this checkout>`.

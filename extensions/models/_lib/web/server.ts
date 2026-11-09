@@ -1,5 +1,8 @@
-// The viewer's HTTP handler. It only reads: the page and its files, the
-// request list, one request, and an event stream that says when to read again.
+// The viewer's HTTP handler. It only reads: the page, rendered as HTML from
+// swamp data, its files, and an event stream that says when to read the page
+// again and carries nothing else. No route answers with request data as
+// JSON: a script or agent reads requests through the requests behavior's
+// methods and swamp data, whose rules decide what it may see.
 //
 // The page is served on each view's path, so a request has an address a
 // person can reload, bookmark or follow from an exported outcome spec:
@@ -19,6 +22,7 @@ import type {
   WebOverview,
   WebRequest,
 } from "../capture/view_types.ts";
+import { renderPage } from "./page/layout.tsx";
 
 /** One file of the page, as build.ts embeds it. */
 export interface ViewerAsset {
@@ -64,14 +68,10 @@ function respond(
   });
 }
 
-function json(value: unknown, status = 200): Response {
-  return respond(JSON.stringify(value), status, {
-    "content-type": "application/json; charset=utf-8",
-  });
-}
-
 function error(status: number, message: string): Response {
-  return json({ error: message }, status);
+  return respond(message, status, {
+    "content-type": "text/plain; charset=utf-8",
+  });
 }
 
 /** The path's parts, or null for one that doesn't decode. */
@@ -139,6 +139,17 @@ function asset(deps: ViewerDeps, name: string): Response {
   return respond(body, 200, { "content-type": found.type });
 }
 
+function page(deps: ViewerDeps, parts: string[]): Response {
+  const shell = deps.assets["index.html"]?.text ?? "";
+  const { status, html } = renderPage(
+    shell,
+    parts.length === 0
+      ? { page: "list", overview: deps.overview() }
+      : { page: "request", request: deps.request(parts[1]) },
+  );
+  return respond(html, status, { "content-type": "text/html; charset=utf-8" });
+}
+
 function eventStream(deps: ViewerDeps): Response {
   const encoder = new TextEncoder();
   let cleanup = () => {};
@@ -148,8 +159,9 @@ function eventStream(deps: ViewerDeps): Response {
       const send = (text: string) => {
         if (open) controller.enqueue(encoder.encode(text));
       };
+      // Only the event's type: the page reads itself again to see what.
       const unsubscribe = deps.events.subscribe((event) =>
-        send(`data: ${JSON.stringify(event)}\n\n`)
+        send(`data: ${event.type}\n\n`)
       );
       const keepalive = setInterval(
         () => send(": keepalive\n\n"),
@@ -189,18 +201,10 @@ export function handleViewerRequest(
   if (refused) return refused;
   const parts = segments(new URL(req.url).pathname);
   if (parts === null) return error(400, "the path doesn't decode");
-  if (isPagePath(parts)) return asset(deps, "index.html");
-  if (parts[0] === "api") {
-    if (parts.length === 2 && parts[1] === "requests") {
-      return json(deps.overview());
-    }
-    if (parts.length === 3 && parts[1] === "requests") {
-      const found = deps.request(parts[2]);
-      return found ? json(found) : error(404, "there is no such request");
-    }
-    if (parts.length === 2 && parts[1] === "events") return eventStream(deps);
-    return error(404, "no such route");
+  if (isPagePath(parts)) return page(deps, parts);
+  if (parts.length === 1 && parts[0] === "events") return eventStream(deps);
+  if (parts.length === 1 && parts[0] !== "index.html") {
+    return asset(deps, parts[0]);
   }
-  if (parts.length === 1) return asset(deps, parts[0]);
   return error(404, "no such page");
 }

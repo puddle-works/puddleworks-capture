@@ -1,5 +1,6 @@
-// Builds the viewer page (deno task build:web), as stagecraft builds its
-// studio. It bundles src/app.tsx for the browser into dist/ (a scratch
+// Builds the viewer page's files (deno task build:web). The server renders
+// the page's HTML (extensions/models/_lib/web/page); this bundles the page's
+// script, src/app.ts, for the browser into dist/ (a scratch
 // directory git ignores), adds the page's HTML, CSS and icon, and writes every
 // served file into extensions/models/_lib/web/assets.ts, which the serve
 // method serves from. The page is embedded because a behavior pulled as an
@@ -19,17 +20,13 @@ const LIB = new URL("extensions/models/_lib/", ROOT);
 const ASSETS_MODULE = new URL("web/assets.ts", LIB);
 
 /**
- * The extension modules the page's source reaches, by path in
- * extensions/models/_lib/. The page imports only their types, but a change to
- * them can change what it shows, so they are inputs. The build refuses a graph
- * that differs, and assets_test compares this list with a walk of the imports.
+ * The extension modules the page's script reaches, by path in
+ * extensions/models/_lib/: none now that the server renders the page. A
+ * change to one could change the script, so they would be inputs. The build
+ * refuses a graph that differs, and assets_test compares this list with a
+ * walk of the imports.
  */
-export const LIB_INPUTS = [
-  "capture/ports.ts",
-  "capture/view_types.ts",
-  "domain/build_result_v1.ts",
-  "domain/model.ts",
-];
+export const LIB_INPUTS: string[] = [];
 
 /** The page's tests, which are never bundled. */
 const isTestFile = (path: string) => /_test\.tsx?$/.test(path);
@@ -199,7 +196,7 @@ function literal(text: string): string {
 }
 
 async function build() {
-  const entry = new URL("app.tsx", SRC);
+  const entry = new URL("app.ts", SRC);
   await checkModuleGraph(entry);
   await Deno.remove(DIST, { recursive: true }).catch(() => {});
   await Deno.mkdir(DIST, { recursive: true });
