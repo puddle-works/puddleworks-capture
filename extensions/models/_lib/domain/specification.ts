@@ -88,7 +88,7 @@ function replaceLatest(
 
 /**
  * Saves the draft: edits the latest draft version, or starts the next one.
- * Content with no recipe keeps the one the latest version has.
+ * Content with no recipe, or no effects, keeps the one the latest version has.
  */
 export function editSpecification(
   request: Request,
@@ -115,7 +115,12 @@ export function editSpecification(
   }
   const latest = latestSpecification(request);
   const recipe = parsed.data.recipe ?? latest?.content.recipe;
-  const edited = recipe ? { ...parsed.data, recipe } : parsed.data;
+  const effects = parsed.data.effects ?? latest?.content.effects;
+  const edited = {
+    ...parsed.data,
+    ...(recipe && { recipe }),
+    ...(effects && { effects }),
+  };
   requirePhraseKept(edited, request.requestedPhrase);
   if (latest?.status === "draft") {
     return {
@@ -145,7 +150,13 @@ export function editSpecification(
   };
 }
 
-export function propose(request: Request, actor: Person, at: string): Request {
+/** `note`, when given, says why in the history. */
+export function propose(
+  request: Request,
+  actor: Person,
+  at: string,
+  note: string | null = null,
+): Request {
   checkTransition(request, actor, "propose");
   const latest = latestSpecification(request);
   if (latest?.status !== "draft") {
@@ -165,7 +176,7 @@ export function propose(request: Request, actor: Person, at: string): Request {
     );
   }
   requireNoOpenQuestions(request);
-  const moved = applyTransition(request, actor, "propose", at);
+  const moved = applyTransition(request, actor, "propose", at, note);
   return {
     ...moved,
     specifications: replaceLatest(request, {
@@ -292,4 +303,56 @@ export function revise(request: Request, actor: Person, at: string): Request {
     ...applyTransition(request, actor, "revise", at),
     specifications: [...request.specifications, next],
   };
+}
+
+/**
+ * A revised spec, with why it changed, proposed in one step: revises an
+ * agreed, building or released request, saves the content as the next
+ * version with `reason` as its changeSummary, and proposes it.
+ * `basedOnVersion` is the version the change starts from; it is refused if a
+ * newer one exists. Anything refused leaves the request as it was.
+ */
+export function reviseSpecification(
+  request: Request,
+  actor: Person,
+  { content, reason, basedOnVersion }: {
+    content: SpecificationContent;
+    reason: string;
+    basedOnVersion: number;
+  },
+  at: string,
+): Request {
+  const why = reason.trim();
+  if (!why) {
+    throw new DomainError(
+      "invalid_input",
+      "Say why the specification changed, so the outcome owner knows what they are agreeing to.",
+    );
+  }
+  requirePermission(request, actor, "editSpecification");
+  const latest = latestSpecification(request);
+  if (!latest) {
+    throw new DomainError(
+      "invalid_state",
+      "There is no specification yet to revise.",
+    );
+  }
+  if (basedOnVersion !== latest.version) {
+    throw new DomainError(
+      "invalid_state",
+      basedOnVersion < latest.version
+        ? `You started from version ${basedOnVersion}, but version ${latest.version} is newer. Read it again, then make your change to it.`
+        : `There is no version ${basedOnVersion}; the latest is version ${latest.version}.`,
+    );
+  }
+  const reopened = BUILT_FROM_AGREED.includes(request.status)
+    ? revise(request, actor, at)
+    : request;
+  const edited = editSpecification(reopened, actor, content, [], at);
+  const saved = latestSpecification(edited)!;
+  const summarised = {
+    ...edited,
+    specifications: replaceLatest(edited, { ...saved, changeSummary: why }),
+  };
+  return propose(summarised, actor, at, why);
 }

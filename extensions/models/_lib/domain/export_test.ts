@@ -67,6 +67,29 @@ describe("outcome-spec/v1", () => {
     expect(OutcomeSpecV1Schema.parse(doc)).toEqual(doc);
   });
 
+  it("carries the agreed effects unchanged, and leaves them out when there are none", () => {
+    const effects = {
+      kind: "write" as const,
+      changes: ["removes git worktrees"],
+    };
+    const r = agreedRequest();
+    const withEffects = {
+      ...r,
+      specifications: r.specifications.map((s) => ({
+        ...s,
+        content: { ...s.content, effects },
+      })),
+    };
+    const doc = toOutcomeSpecV1(withEffects, T2, PAGE);
+    expect(doc.specification.effects).toEqual(effects);
+    expect(OutcomeSpecV1Schema.parse(doc).specification.effects).toEqual(
+      effects,
+    );
+    expect("effects" in toOutcomeSpecV1(r, T2, PAGE).specification).toBe(
+      false,
+    );
+  });
+
   it("carries the requested phrase, and leaves it out when there is none", () => {
     const r = { ...agreedRequest(), requestedPhrase: "what should I order" };
     expect(toOutcomeSpecV1(r, T2, PAGE).request.requestedPhrase).toBe(
@@ -176,6 +199,10 @@ Counts are entered once and the order list is ready.
 
 When there is nothing to show: Nothing needs ordering.
 
+## Reads or writes
+
+Not said, so treat it as changing things: ask before running it.
+
 ## Open questions
 
 None.
@@ -236,7 +263,24 @@ Taken from the phrase: repo (repo).
 
 Extensions to start from: @example/stock.
 
-## Open questions`,
+## Reads or writes`,
+    );
+  });
+
+  it("says whether it reads or writes, and what it changes", () => {
+    const doc = toOutcomeSpecV1(agreedRequest(), T2, PAGE);
+    const withEffects = (effects: typeof doc.specification.effects) =>
+      toMarkdown({ ...doc, specification: { ...doc.specification, effects } });
+    expect(withEffects({ kind: "read", changes: [] })).toContain(
+      "## Reads or writes\n\nIt only reads; it changes nothing.\n",
+    );
+    expect(
+      withEffects({
+        kind: "write",
+        changes: ["deletes merged branches", "pulls main"],
+      }),
+    ).toContain(
+      "## Reads or writes\n\nIt changes things:\n\n- deletes merged branches\n- pulls main\n",
     );
   });
 });

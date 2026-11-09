@@ -1,5 +1,4 @@
-// What the viewer page is sent. Types only, shared by the server and the page
-// (web/src), so the two can't drift apart.
+// What the viewer renders its page from. Types only.
 import type {
   BuildResultRecord,
   ExampleCheck,
@@ -20,6 +19,13 @@ export interface PersonRef {
   name: string;
 }
 
+/** Another request, as a link to it shows it. */
+export interface RequestRef {
+  id: string;
+  number: number | null;
+  title: string;
+}
+
 /** A request in the list. */
 export interface WebSummary {
   id: string;
@@ -34,6 +40,10 @@ export interface WebSummary {
   specificationVersion: number | null;
   /** Brought in from the old Puddleworks app. */
   imported: boolean;
+  /** The request this one repeats, once closed as its duplicate. */
+  duplicateOf: RequestRef | null;
+  /** The requests closed as repeats of this one: it was asked this many more times. */
+  duplicates: RequestRef[];
   createdAt: string;
   updatedAt: string;
 }

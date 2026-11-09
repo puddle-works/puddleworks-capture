@@ -14,6 +14,7 @@ export type Permission =
   | "decline"
   | "export"
   | "revise"
+  | "startBuilding"
   | "recordBuildResult";
 
 const GRANTS: Record<Role, readonly Permission[]> = {
@@ -42,6 +43,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "decline",
     "export",
     "revise",
+    "startBuilding",
     "recordBuildResult",
   ],
   observer: [],
@@ -83,6 +85,7 @@ const PERMISSION_WORDS: Record<Permission, string> = {
   decline: "decline the request",
   export: "export the specification",
   revise: "revise the specification",
+  startBuilding: "start building",
   recordBuildResult: "record a build result",
 };
 

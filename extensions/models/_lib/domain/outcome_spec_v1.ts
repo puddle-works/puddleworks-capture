@@ -30,6 +30,8 @@ export const OutcomeSpecV1Schema = z.object({
   }),
   specification: SpecificationContentSchema.extend({
     version: z.number().int().positive(),
+    /** Why it changed from the version before, when it was revised with one. */
+    changeSummary: z.string().optional(),
   }),
   agreement: z.object({
     agreedBy: personSchema,
@@ -75,7 +77,12 @@ export function toOutcomeSpecV1(
         { requestedPhrase: request.requestedPhrase }),
       url,
     },
-    specification: { version: spec.version, ...spec.content },
+    specification: {
+      version: spec.version,
+      ...spec.content,
+      ...(spec.changeSummary !== undefined &&
+        { changeSummary: spec.changeSummary }),
+    },
     agreement: {
       agreedBy: { name: agreedBy?.name ?? "", email: agreedBy?.email ?? "" },
       agreedAt: agreement.agreedAt,
@@ -129,6 +136,17 @@ function recipeSection(doc: OutcomeSpecV1): string {
   ].filter(Boolean).join("\n\n");
 }
 
+/** Whether it reads or writes, in words. None is taken as changing things. */
+export function effectsWords(
+  effects: OutcomeSpecV1["specification"]["effects"],
+) {
+  if (!effects) {
+    return "Not said, so treat it as changing things: ask before running it.";
+  }
+  if (effects.kind === "read") return "It only reads; it changes nothing.";
+  return `It changes things:\n\n${bullets(effects.changes)}`;
+}
+
 /** The same document as Markdown, for pasting into any process. */
 export function toMarkdown(doc: OutcomeSpecV1): string {
   const s = doc.specification;
@@ -149,6 +167,8 @@ export function toMarkdown(doc: OutcomeSpecV1): string {
     `Outcome specification, version ${s.version}. Agreed by ${a.agreedBy.name} (${a.agreedBy.email}) on ${
       a.agreedAt.slice(0, 10)
     }.`,
+    s.changeSummary !== undefined &&
+    `Changed from version ${s.version - 1}: ${s.changeSummary}`,
     `## Problem\n\n${s.problemStatement}`,
     `## Desired outcome\n\n${s.desiredOutcome}`,
     `## In scope\n\n${bullets(s.scope.in)}`,
@@ -157,11 +177,12 @@ export function toMarkdown(doc: OutcomeSpecV1): string {
     `## Assumptions\n\n${bullets(s.assumptions)}`,
     `## Acceptance criteria\n\n${criteria}`,
     `## Recipe\n\n${recipeSection(doc)}`,
+    `## Reads or writes\n\n${effectsWords(s.effects)}`,
     `## Open questions\n\n${questions}`,
     `## How it is done today\n\n${
       doc.request.currentProcess || "Not described."
     }`,
     `## People\n\n${people}`,
     `---\n\n${doc.format} · [request ${doc.request.id}](${doc.request.url}) · spec hash ${a.specHash}`,
-  ].join("\n\n") + "\n";
+  ].filter((part) => part !== false).join("\n\n") + "\n";
 }
