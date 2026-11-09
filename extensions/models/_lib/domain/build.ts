@@ -52,8 +52,41 @@ export function exampleChecks(
       requested: phrase === request.requestedPhrase,
       outcome: !reported ? "missing" : reported.passed ? "passed" : "failed",
       detail: reported?.detail ?? null,
+      recipeId: reported?.recipeId ?? null,
+      router: reported?.router ?? null,
     };
   });
+}
+
+/**
+ * What stops a passed example counting, in plain words: it must name its
+ * recipe and have gone through puddlerouter with the published version. The
+ * recipe may have been built for another request, so its `source` is shown,
+ * not checked.
+ */
+function routerProblems(
+  { phrase, recipeId, router }: ExampleCheck,
+  result: BuildResultV1,
+): string[] {
+  const problems: string[] = [];
+  if (!recipeId) {
+    problems.push(
+      `The example "${phrase}" doesn't name the recipe that answers it.`,
+    );
+  }
+  if (!router) {
+    return [
+      ...problems,
+      `The example "${phrase}" wasn't tested through puddlerouter.`,
+    ];
+  }
+  const published = result.published?.version;
+  if (published && router.version !== published) {
+    problems.push(
+      `The example "${phrase}" went through puddlerouter with version ${router.version}, not the published ${published}.`,
+    );
+  }
+  return problems;
 }
 
 /** What stops this build being the release, in plain words. Empty means released. */
@@ -66,7 +99,8 @@ export function releaseProblems(
     ? [
       "The agreed spec has no recipe examples to check it against. Revise it to add a recipe.",
     ]
-    : checks.flatMap(({ phrase, requested, outcome, detail }) => {
+    : checks.flatMap((check) => {
+      const { phrase, requested, outcome, detail } = check;
       if (outcome === "failed") {
         return [
           `The example "${phrase}" failed${detail ? `: ${detail}` : "."}`,
@@ -79,8 +113,18 @@ export function releaseProblems(
             : `The example "${phrase}" wasn't reported.`,
         ];
       }
-      return [];
+      return routerProblems(check, record.result);
     });
+  const recipes = [
+    ...new Set(checks.flatMap((c) => (c.recipeId ? [c.recipeId] : []))),
+  ];
+  if (recipes.length > 1) {
+    problems.push(
+      `The examples were answered by different recipes (${
+        recipes.join(", ")
+      }); one recipe answers this request.`,
+    );
+  }
   if (!record.result.published) problems.push("It isn't published yet.");
   return problems;
 }

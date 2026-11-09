@@ -683,6 +683,27 @@ function BuildView({ build, released }: {
                 h("span", { class: "badge badge-draft" }, "Requested"),
             ),
             e.detail && h("dd", null, e.detail),
+            e.router
+              ? h(
+                "dd",
+                { class: "card-meta" },
+                e.recipeId ? `Recipe ${e.recipeId}` : "A recipe",
+                ", through puddlerouter with ",
+                e.router.version,
+                e.router.outcome === "answered-after-yes" ? " after a yes" : "",
+                " · ",
+                formatTime(e.router.testedAt),
+                e.router.source &&
+                  (e.router.source.url === build.result.source?.url
+                    ? " · built for this request"
+                    : ` · built for ${e.router.source.url}`),
+              )
+              : e.outcome === "passed" &&
+                h(
+                  "dd",
+                  { class: "card-meta" },
+                  "Not tested through puddlerouter.",
+                ),
           );
         }),
       ),

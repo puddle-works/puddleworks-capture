@@ -200,6 +200,9 @@ export interface ExampleCheck {
   requested: boolean;
   outcome: "passed" | "failed" | "missing";
   detail: string | null;
+  /** The recipe that answered it, and how puddlerouter did; null when not said. */
+  recipeId: string | null;
+  router: NonNullable<BuildResultV1["examples"]>[number]["router"] | null;
 }
 
 /** Someone who logged a request for the person who asked. Not a participant. */
