@@ -1,7 +1,8 @@
 // Every request, grouped by where it is, and the people list. Each stage shows
-// its most recent requests; the rest roll down beneath them on "Show all".
+// its first few requests; the rest roll down beneath them on "Show all".
 import { useEffect, useState } from "preact/hooks";
 import type {
+  RequestStatus,
   WebOverview,
   WebSummary,
 } from "../../extensions/models/_lib/capture/view_types.ts";
@@ -12,7 +13,7 @@ import {
   formatTime,
   numbered,
   plural,
-  splitRecent,
+  splitStage,
   STATUS,
   STATUS_GROUPS,
 } from "./words.ts";
@@ -51,6 +52,7 @@ export function RequestList({ changes }: { changes: number }) {
           return (
             <Stage
               key={status}
+              status={status}
               id={`group-${status}`}
               heading={heading}
               group={group}
@@ -80,16 +82,19 @@ export function RequestList({ changes }: { changes: number }) {
   );
 }
 
-function Stage(
-  { id, heading, group }: { id: string; heading: string; group: WebSummary[] },
-) {
+function Stage({ status, id, heading, group }: {
+  status: RequestStatus;
+  id: string;
+  heading: string;
+  group: WebSummary[];
+}) {
   const [open, setOpen] = useState(false);
-  const { recent, rest } = splitRecent(group);
+  const { shown, rest } = splitStage(status, group);
   const restId = `${id}-rest`;
   return (
     <section aria-labelledby={id}>
       <h2 id={id}>{heading}</h2>
-      {recent.map((r) => <Card key={r.id} request={r} />)}
+      {shown.map((r) => <Card key={r.id} request={r} />)}
       {rest.length > 0 && (
         <>
           <div id={restId} class={open ? "concertina open" : "concertina"}>

@@ -25,9 +25,9 @@ import {
   numbered,
   pieceLabels,
   plural,
-  RECENT_PER_STAGE,
   routeOf,
-  splitRecent,
+  SHOWN_PER_STAGE,
+  splitStage,
   STATUS_GROUPS,
 } from "./words.ts";
 
@@ -232,29 +232,43 @@ describe("words", () => {
   });
 });
 
-describe("splitRecent", () => {
-  const at = (day: number) => ({
-    id: `r-${day}`,
+describe("splitStage", () => {
+  const req = (n: number | null, day: number) => ({
+    id: n === null ? `old-${day}` : `#${n}`,
+    number: n,
     updatedAt: `2026-10-${String(day).padStart(2, "0")}T09:00:00.000Z`,
   });
+  const ids = (rs: { id: string }[]) => rs.map((r) => r.id);
 
-  it("shows the five most recently updated and keeps the rest for show all", () => {
-    expect(RECENT_PER_STAGE).toBe(5);
-    const group = [3, 9, 1, 7, 5, 8, 2].map(at);
-    const { recent, rest } = splitRecent(group);
-    expect(recent.map((r) => r.id)).toEqual([
-      "r-9",
-      "r-8",
-      "r-7",
-      "r-5",
-      "r-3",
-    ]);
-    expect(rest.map((r) => r.id)).toEqual(["r-2", "r-1"]);
+  it("shows five in other stages, last updated first, and keeps the rest for show all", () => {
+    expect(SHOWN_PER_STAGE).toBe(5);
+    const group = [3, 9, 1, 7, 5, 8, 2].map((day) => req(10 - day, day));
+    const { shown, rest } = splitStage("agreed", group);
+    expect(ids(shown)).toEqual(["#1", "#2", "#3", "#5", "#7"]);
+    expect(ids(rest)).toEqual(["#8", "#9"]);
+  });
+
+  it("puts being discussed in number order, highest first, whenever each was updated", () => {
+    // #2 was updated last and #9 longest ago; neither moves.
+    const group = [[4, 3], [9, 1], [2, 28], [7, 5], [5, 2], [8, 4], [3, 6]]
+      .map(([n, day]) => req(n, day));
+    const { shown, rest } = splitStage("discussing", group);
+    expect(ids(shown)).toEqual(["#9", "#8", "#7", "#5", "#4"]);
+    expect(ids(rest)).toEqual(["#3", "#2"]);
+  });
+
+  it("puts being discussed requests without a number last, last updated first", () => {
+    const group = [req(null, 20), req(1, 2), req(null, 25), req(3, 1)];
+    const { shown } = splitStage("discussing", group);
+    expect(ids(shown)).toEqual(["#3", "#1", "old-25", "old-20"]);
   });
 
   it("keeps nothing back when a stage has five or fewer", () => {
-    const { recent, rest } = splitRecent([1, 2, 3, 4, 5].map(at));
-    expect(recent.length).toBe(5);
+    const { shown, rest } = splitStage(
+      "draft",
+      [1, 2, 3, 4, 5].map((n) => req(n, n)),
+    );
+    expect(shown.length).toBe(5);
     expect(rest).toEqual([]);
   });
 });

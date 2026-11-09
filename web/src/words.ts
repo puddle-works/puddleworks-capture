@@ -35,18 +35,34 @@ export const STATUS_GROUPS: [RequestStatus, string][] = [
 ];
 
 /** How many requests each stage of the list shows before "Show all". */
-export const RECENT_PER_STAGE = 5;
+export const SHOWN_PER_STAGE = 5;
 
-/** A stage's most recently updated requests, newest first, and the rest. */
-export function splitRecent<T extends { updatedAt: string }>(
+type Sortable = { number: number | null; updatedAt: string };
+
+const lastUpdatedFirst = (a: Sortable, b: Sortable) =>
+  b.updatedAt.localeCompare(a.updatedAt);
+
+/** Highest number first, so a request keeps its place when it changes; unnumbered ones last. */
+const highestNumberFirst = (a: Sortable, b: Sortable) =>
+  a.number === b.number
+    ? lastUpdatedFirst(a, b)
+    : (b.number ?? -Infinity) - (a.number ?? -Infinity);
+
+/**
+ * A stage's requests in its order, split into the first few and the rest.
+ * Being discussed goes by request number; every other stage puts the last
+ * updated first.
+ */
+export function splitStage<T extends Sortable>(
+  status: RequestStatus,
   group: T[],
-): { recent: T[]; rest: T[] } {
-  const newest = [...group].sort((a, b) =>
-    b.updatedAt.localeCompare(a.updatedAt)
+): { shown: T[]; rest: T[] } {
+  const sorted = [...group].sort(
+    status === "discussing" ? highestNumberFirst : lastUpdatedFirst,
   );
   return {
-    recent: newest.slice(0, RECENT_PER_STAGE),
-    rest: newest.slice(RECENT_PER_STAGE),
+    shown: sorted.slice(0, SHOWN_PER_STAGE),
+    rest: sorted.slice(SHOWN_PER_STAGE),
   };
 }
 
