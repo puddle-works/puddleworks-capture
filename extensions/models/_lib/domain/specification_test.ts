@@ -10,6 +10,8 @@ import {
   requestChanges,
   resolveQuestion,
   revise,
+  specHashInput,
+  SpecificationContentSchema,
   specificationProblems,
   submit,
 } from "./index.ts";
@@ -259,5 +261,82 @@ describe("export record", () => {
         [1, "outcome-spec/v1+json", owner.userId],
         [1, "markdown", builder.userId],
       ]);
+  });
+});
+
+describe("effects", () => {
+  const parse = (effects: unknown) =>
+    SpecificationContentSchema.safeParse({ ...goodSpec, effects }).success;
+
+  it("may be left out, read, or write with what it changes", () => {
+    expect(SpecificationContentSchema.safeParse(goodSpec).success).toBe(true);
+    expect(parse({ kind: "read" })).toBe(true);
+    expect(parse({ kind: "read", changes: [] })).toBe(true);
+    expect(parse({ kind: "write", changes: ["pulls main"] })).toBe(true);
+  });
+
+  it("refuses write with nothing it changes, read with changes, and any other kind", () => {
+    expect(parse({ kind: "write" })).toBe(false);
+    expect(parse({ kind: "write", changes: [" "] })).toBe(false);
+    expect(parse({ kind: "read", changes: ["pulls main"] })).toBe(false);
+    expect(parse({ kind: "delete", changes: [] })).toBe(false);
+  });
+
+  it("keeps the effects when an edit leaves them out", () => {
+    const effects = { kind: "write" as const, changes: ["pulls main"] };
+    let r = editSpecification(
+      discussingRequest(),
+      builder,
+      { ...goodSpec, effects },
+      [],
+      T1,
+    );
+    r = editSpecification(r, builder, goodSpec, [], T1);
+    expect(r.specifications[0].content.effects).toEqual(effects);
+    r = editSpecification(
+      r,
+      builder,
+      { ...goodSpec, effects: { kind: "read", changes: [] } },
+      [],
+      T1,
+    );
+    expect(r.specifications[0].content.effects).toEqual({
+      kind: "read",
+      changes: [],
+    });
+  });
+
+  it("leaves a spec without them hashing as it did before", () => {
+    const r = editSpecification(discussingRequest(), builder, goodSpec, [], T1);
+    expect("effects" in r.specifications[0].content).toBe(false);
+    expect(specHashInput(r.specifications[0].content)).toBe(
+      specHashInput(goodSpec),
+    );
+  });
+
+  it("is part of what is agreed: it changes the hash, and changing it needs a new version", () => {
+    const write = {
+      ...goodSpec,
+      effects: { kind: "write" as const, changes: ["pulls main"] },
+    };
+    const read = {
+      ...goodSpec,
+      effects: { kind: "read" as const, changes: [] },
+    };
+    expect(specHashInput(write) === specHashInput(read)).toBe(false);
+    expect(specHashInput(read) === specHashInput(goodSpec)).toBe(false);
+    expect(() => editSpecification(agreedRequest(), builder, read, [], T2))
+      .toThrowError(expect.objectContaining({ code: "invalid_state" }));
+    const revised = editSpecification(
+      revise(agreedRequest(), owner, T2),
+      builder,
+      read,
+      [],
+      T2,
+    );
+    expect(revised.specifications.map((s) => s.content.effects)).toEqual([
+      undefined,
+      read.effects,
+    ]);
   });
 });

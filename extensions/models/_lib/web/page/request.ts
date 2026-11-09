@@ -357,6 +357,7 @@ function Version({ spec }: {
         ),
       ),
     h(RecipeView, { recipe: content.recipe }),
+    h(EffectsView, { effects: content.effects }),
     spec.basedOnMessageIds.length > 0 &&
       h(
         "p",
@@ -413,6 +414,27 @@ function RecipeView({ recipe }: {
         title: "Extensions to start from",
         items: recipe.candidateExtensions,
       }),
+  );
+}
+
+/** Whether it only reads or also changes things. None counts as changing things. */
+function EffectsView({ effects }: {
+  effects: Spec["content"]["effects"];
+}) {
+  return h(
+    Fragment,
+    null,
+    h("h3", null, "Reads or writes"),
+    !effects
+      ? h("p", { class: "empty" }, "Not said, so it counts as changing things.")
+      : effects.kind === "read"
+      ? h("p", null, "It only reads; it changes nothing.")
+      : h(
+        Fragment,
+        null,
+        h("p", null, "It changes things:"),
+        h("ul", null, effects.changes.map((c, n) => h("li", { key: n }, c))),
+      ),
   );
 }
 

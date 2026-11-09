@@ -99,6 +99,35 @@ export const RecipeSchema = z.object({
 });
 export type Recipe = z.infer<typeof RecipeSchema>;
 
+export const EFFECT_KINDS = ["read", "write"] as const;
+
+/**
+ * Whether the agreed outcome only reads, or also changes things, and what it
+ * changes, in plain words. It says what it may change, not how. A spec with
+ * none counts as `write` for anyone acting on it, so a missing field is never
+ * taken as safe.
+ */
+export const EffectsSchema = z.object({
+  kind: z.enum(EFFECT_KINDS),
+  changes: z.array(z.string().trim().min(1).max(500)).max(50).default([]),
+}).superRefine(({ kind, changes }, ctx) => {
+  if (kind === "write" && changes.length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["changes"],
+      message: "Say what it changes: a write outcome needs at least one.",
+    });
+  }
+  if (kind === "read" && changes.length > 0) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["changes"],
+      message: "A read outcome changes nothing, so it has no changes.",
+    });
+  }
+});
+export type Effects = z.infer<typeof EffectsSchema>;
+
 export const SpecificationContentSchema = z.object({
   problemStatement: text,
   desiredOutcome: text,
@@ -112,6 +141,8 @@ export const SpecificationContentSchema = z.object({
     .max(100),
   /** Every spec needs one to be proposed. Specs saved before recipes have none. */
   recipe: RecipeSchema.optional(),
+  /** Whether it reads or writes. Optional: none counts as write. */
+  effects: EffectsSchema.optional(),
 });
 export type SpecificationContent = z.infer<typeof SpecificationContentSchema>;
 
