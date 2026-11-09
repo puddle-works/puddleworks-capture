@@ -374,6 +374,35 @@ main .problems p {
   color: var(--color-warning);
   margin-bottom: 0;
 }
+.changed {
+  background: var(--color-accent-glow);
+  border: 1px solid rgba(94, 196, 212, 0.25);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 10px 0;
+  font-size: 13px;
+}
+main .changed h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 10px 0 4px;
+}
+.diff {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.diff del,
+.diff ins {
+  text-decoration: none;
+}
+main .diff .removed {
+  color: var(--color-danger);
+}
+main .diff .added {
+  color: var(--color-success);
+}
 .criteria {
   margin-bottom: 16px;
 }

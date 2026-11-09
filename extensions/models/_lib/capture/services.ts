@@ -18,6 +18,7 @@ import {
   type Message,
   type NewRequest,
   type OutcomeSpecV1,
+  OutcomeSpecV1Schema,
   parseBuildResult,
   type Participant,
   type Person,
@@ -36,10 +37,12 @@ import {
   reviewPrompt,
   reviewVersion,
   revise,
+  reviseSpecification,
   type Role,
   roleOf,
   specHashInput,
   type SpecificationContent,
+  SpecificationContentSchema,
   startBuilding,
   submit,
   toMarkdown,
@@ -427,6 +430,65 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
           );
         }
         return editSpecification(r, p, content, basedOnMessageIds, at);
+      }),
+
+    /**
+     * A revised spec and why, proposed in one step. The spec is `content`, or
+     * the `specification` part of an outcome-spec/v1 document `outcomeSpec`
+     * for this request; `basedOnVersion` defaults to that document's version.
+     */
+    reviseSpecification: (
+      as: string,
+      id: string,
+      { content, outcomeSpec, reason, basedOnVersion }: {
+        content?: SpecificationContent;
+        outcomeSpec?: unknown;
+        reason: string;
+        basedOnVersion?: number;
+      },
+    ) =>
+      mutate(as, id, (r, p, at) => {
+        if ((content === undefined) === (outcomeSpec === undefined)) {
+          throw new DomainError(
+            "invalid_input",
+            "Give the revised spec as either specification or outcomeSpec, not both.",
+          );
+        }
+        let spec = content;
+        let from = basedOnVersion;
+        if (outcomeSpec !== undefined) {
+          const doc = OutcomeSpecV1Schema.safeParse(outcomeSpec);
+          if (!doc.success) {
+            throw new DomainError(
+              "invalid_input",
+              `That isn't an outcome-spec/v1 document: ${
+                doc.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`)
+                  .join(" ")
+              }`,
+            );
+          }
+          if (doc.data.request.id !== r.id) {
+            throw new DomainError(
+              "invalid_input",
+              `That outcome spec is for request ${doc.data.request.id}, not this one (${r.id}).`,
+            );
+          }
+          // Only the content: its version, summary and agreement stay behind.
+          spec = SpecificationContentSchema.parse(doc.data.specification);
+          from ??= doc.data.specification.version;
+        }
+        if (from === undefined) {
+          throw new DomainError(
+            "invalid_input",
+            "Say which version the change starts from, with basedOnVersion.",
+          );
+        }
+        return reviseSpecification(
+          r,
+          p,
+          { content: spec!, reason, basedOnVersion: from },
+          at,
+        );
       }),
 
     /** The prompt for a reviewer of the spec up for agreement, and its version. */

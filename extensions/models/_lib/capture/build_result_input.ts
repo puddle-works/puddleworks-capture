@@ -1,36 +1,38 @@
-// record_build_result takes a build result as an object, JSON text, a file
-// path (relative to the repository) or an https URL. This reads it, without
-// checking it is one; the service does that.
+// record_build_result takes a build result, and revise_specification an
+// outcome spec, as an object, JSON text, a file path (relative to the
+// repository) or an https URL. This reads it, without checking it is one;
+// the service does that.
 import { DomainError } from "../domain/index.ts";
 
-export interface BuildResultInputDeps {
+export interface JsonInputDeps {
   /** Where a relative path is read from. */
   repoDir: string;
   fetch: (url: string) => Promise<Response>;
 }
 
-function parseJson(text: string): unknown {
+function parseJson(text: string, what: string): unknown {
   try {
     return JSON.parse(text);
   } catch (e) {
     throw new DomainError(
       "invalid_input",
-      `The build result isn't JSON: ${(e as Error).message}`,
+      `The ${what} isn't JSON: ${(e as Error).message}`,
     );
   }
 }
 
-export async function readBuildResultInput(
+export async function readJsonInput(
   value: unknown,
-  { repoDir, fetch }: BuildResultInputDeps,
+  { repoDir, fetch }: JsonInputDeps,
+  what = "build result",
 ): Promise<unknown> {
   if (typeof value !== "string") return value;
   const given = value.trim();
-  if (given.startsWith("{")) return parseJson(given);
+  if (given.startsWith("{")) return parseJson(given, what);
   if (given.startsWith("http://")) {
     throw new DomainError(
       "invalid_input",
-      "Fetch a build result over https, not http.",
+      `Fetch a ${what} over https, not http.`,
     );
   }
   if (given.startsWith("https://")) {
@@ -38,14 +40,14 @@ export async function readBuildResultInput(
     if (!response.ok) {
       throw new DomainError(
         "invalid_input",
-        `${given} answered ${response.status}, not a build result.`,
+        `${given} answered ${response.status}, not a ${what}.`,
       );
     }
-    return parseJson(await response.text());
+    return parseJson(await response.text(), what);
   }
   const file = given.startsWith("/") ? given : `${repoDir}/${given}`;
   try {
-    return parseJson(await Deno.readTextFile(file));
+    return parseJson(await Deno.readTextFile(file), what);
   } catch (e) {
     if (e instanceof Deno.errors.NotFound) {
       throw new DomainError(

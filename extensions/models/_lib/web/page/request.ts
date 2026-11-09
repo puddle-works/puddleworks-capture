@@ -14,6 +14,7 @@ import {
   pieceLabels,
   plural,
   ROLE,
+  specChanges,
   STATUS,
   words,
 } from "./words.ts";
@@ -217,7 +218,7 @@ function Specifications({ request }: {
     { "aria-labelledby": "spec-heading" },
     h("h2", { id: "spec-heading" }, "Specification"),
     latest
-      ? h(Version, { spec: latest })
+      ? h(Version, { spec: latest, versions })
       : h("p", { class: "empty" }, "No specification yet."),
     request.agreements.length > 0 &&
       h(
@@ -227,8 +228,10 @@ function Specifications({ request }: {
         h(
           "ul",
           { class: "agreements" },
-          request.agreements.map((a) =>
-            h(
+          request.agreements.map((a) => {
+            const why = versions.find((v) => v.version === a.specVersion)
+              ?.changeSummary;
+            return h(
               "li",
               { key: `${a.specVersion}-${a.agreedAt}` },
               "Version ",
@@ -244,8 +247,9 @@ function Specifications({ request }: {
                 { title: "SHA-256 of the agreed content" },
                 a.specHash.slice(0, 12),
               ),
-            )
-          ),
+              why && h("div", { class: "card-meta" }, "Why it changed: ", why),
+            );
+          }),
         ),
       ),
     request.exports.length > 0 &&
@@ -298,7 +302,11 @@ function Specifications({ request }: {
                   " ",
                   formatTime(v.updatedAt),
                 ),
-                h("div", { class: "older-version" }, h(Version, { spec: v })),
+                h(
+                  "div",
+                  { class: "older-version" },
+                  h(Version, { spec: v, versions }),
+                ),
               ),
             )
           ),
@@ -307,10 +315,12 @@ function Specifications({ request }: {
   );
 }
 
-function Version({ spec }: {
+function Version({ spec, versions }: {
   spec: Spec;
+  versions: Spec[];
 }) {
   const { content } = spec;
+  const previous = versions.find((v) => v.version === spec.version - 1);
   return h(
     "div",
     { class: "spec" },
@@ -331,6 +341,8 @@ function Version({ spec }: {
       " ",
       formatTime(spec.updatedAt),
     ),
+    spec.changeSummary &&
+      h(Changed, { why: spec.changeSummary, from: previous, to: spec }),
     spec.status === "draft" && spec.problems.length > 0 &&
       h(
         "div",
@@ -367,6 +379,63 @@ function Version({ spec }: {
         " ",
         "from the discussion.",
       ),
+  );
+}
+
+/** Why a version changed, and what changed from the one before. */
+function Changed({ why, from, to }: {
+  why: string;
+  from: Spec | undefined;
+  to: Spec;
+}) {
+  const changes = from ? specChanges(from.content, to.content) : [];
+  return h(
+    "div",
+    { class: "changed" },
+    h(
+      "p",
+      null,
+      h("strong", null, "Why it changed from version ", to.version - 1, ":"),
+      " ",
+      why,
+    ),
+    from && changes.length === 0 &&
+      h(
+        "p",
+        { class: "card-meta" },
+        "The content is the same as version ",
+        from.version,
+        ".",
+      ),
+    changes.map((c) =>
+      h(
+        "div",
+        { key: c.section },
+        h("h4", null, c.section),
+        h(
+          "ul",
+          { class: "diff" },
+          c.removed.map((l, n) =>
+            h(
+              "li",
+              { key: `-${n}`, class: "removed" },
+              h("span", { "aria-hidden": "true" }, "−"),
+              " ",
+              h("del", null, l),
+            )
+          ),
+          c.added.map((l, n) =>
+            h(
+              "li",
+              { key: `+${n}`, class: "added" },
+              h("span", { "aria-hidden": "true" }, "+"),
+              " ",
+              h("ins", null, l),
+            )
+          ),
+        ),
+      )
+    ),
   );
 }
 

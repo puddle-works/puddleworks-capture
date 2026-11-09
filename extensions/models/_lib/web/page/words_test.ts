@@ -5,6 +5,7 @@ import {
   builder,
   buildResult,
   discussingRequest,
+  goodSpec,
   owner,
   releasingResult,
   T2,
@@ -24,6 +25,7 @@ import {
   pieceLabels,
   plural,
   SHOWN_PER_STAGE,
+  specChanges,
   splitStage,
 } from "./words.ts";
 
@@ -309,6 +311,74 @@ describe("pieceLabels", () => {
     }])).toEqual(["weeks (a number)", "project (a repo)"]);
     expect(pieceLabels([{ name: "label", shape: "word" }])).toEqual([
       "label (a word)",
+    ]);
+  });
+});
+
+describe("specChanges", () => {
+  it("names each part that changed, with the lines it lost and gained", () => {
+    const after = {
+      ...goodSpec,
+      desiredOutcome: "Counts are entered once, in either room.",
+      scope: { in: [goodSpec.scope.in[0], "A second room"], out: [] },
+      acceptanceCriteria: [
+        goodSpec.acceptanceCriteria[0],
+        { id: "AC2", text: "The order list covers both rooms" },
+      ],
+    };
+    expect(specChanges(goodSpec, after)).toEqual([
+      {
+        section: "Desired outcome",
+        removed: [goodSpec.desiredOutcome],
+        added: ["Counts are entered once, in either room."],
+      },
+      {
+        section: "In scope",
+        removed: ["Order list"],
+        added: ["A second room"],
+      },
+      { section: "Out of scope", removed: ["Supplier ordering"], added: [] },
+      {
+        section: "Acceptance criteria",
+        removed: ["AC2 The order list matches the spreadsheet for last week"],
+        added: ["AC2 The order list covers both rooms"],
+      },
+    ]);
+  });
+
+  it("counts a change to what it reads or writes", () => {
+    const write = {
+      ...goodSpec,
+      effects: { kind: "write" as const, changes: ["pulls main"] },
+    };
+    expect(specChanges(goodSpec, write)).toEqual([
+      {
+        section: "Reads or writes",
+        removed: [],
+        added: ["Changes: pulls main"],
+      },
+    ]);
+    expect(
+      specChanges(write, {
+        ...goodSpec,
+        effects: { kind: "read", changes: [] },
+      }),
+    ).toEqual([{
+      section: "Reads or writes",
+      removed: ["Changes: pulls main"],
+      added: ["Only reads"],
+    }]);
+  });
+
+  it("finds nothing between a version and a copy of it", () => {
+    expect(specChanges(goodSpec, structuredClone(goodSpec))).toEqual([]);
+  });
+
+  it("counts a recipe added to a spec saved without one", () => {
+    const { recipe: _, ...noRecipe } = goodSpec;
+    expect(specChanges(noRecipe, goodSpec).map((c) => c.section)).toEqual([
+      "Recipe",
+      "When there is nothing to show",
     ]);
   });
 });

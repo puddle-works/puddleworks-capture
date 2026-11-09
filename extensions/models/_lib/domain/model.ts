@@ -160,6 +160,8 @@ export interface SpecificationVersion {
   status: SpecStatus;
   content: SpecificationContent;
   basedOnMessageIds: string[];
+  /** Why it changed from the version before, when it was uploaded as a revision. */
+  changeSummary?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
