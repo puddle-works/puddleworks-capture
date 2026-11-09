@@ -75,6 +75,8 @@ describe("viewer views", () => {
       openQuestionCount: 0,
       specificationVersion: 1,
       imported: false,
+      duplicateOf: null,
+      duplicates: [],
       createdAt: "2026-10-22T09:00:00.000Z",
       updatedAt: T2,
     });
@@ -143,6 +145,42 @@ describe("viewer views", () => {
       openQuestionCount: 1,
       imported: true,
       specificationVersion: null,
+    });
+  });
+});
+
+describe("duplicates on the page", () => {
+  it("count and link the requests closed as repeats, and name the one repeated", () => {
+    const target = stored();
+    const repeat = (id: string, n: number, createdAt: string): Stored => ({
+      ...stored({
+        ...draftRequest(),
+        id,
+        createdAt,
+        status: "duplicate",
+        duplicateOf: "r-1",
+      }),
+      number: n,
+    });
+    const later = repeat("r-9", 9, "2026-10-25T09:00:00.000Z");
+    const earlier = repeat("r-8", 8, "2026-10-24T09:00:00.000Z");
+    // Withdrawn after pointing at it no longer counts.
+    const withdrawn = {
+      ...repeat("r-5", 5, T2),
+      request: {
+        ...repeat("r-5", 5, T2).request,
+        status: "withdrawn" as const,
+      },
+    };
+    const all = [target, later, earlier, withdrawn];
+    expect(toWebSummary(target, all).duplicates).toEqual([
+      { id: "r-8", number: 8, title: "Stock counts" },
+      { id: "r-9", number: 9, title: "Stock counts" },
+    ]);
+    expect(toWebRequest(later, all).duplicateOf).toEqual({
+      id: "r-1",
+      number: 7,
+      title: "Stock counts",
     });
   });
 });

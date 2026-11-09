@@ -12,8 +12,10 @@ export * from "./outcome_spec_v1.ts";
 export * from "./permissions.ts";
 export { recipeProblems, requestedCriterion } from "./recipe.ts";
 export {
+  closeAsDuplicate,
   createRequest,
   decline,
+  DUPLICATE_FROM,
   editDetails,
   inviteParticipant,
   joinAsBuilder,
