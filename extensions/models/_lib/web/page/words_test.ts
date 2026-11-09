@@ -19,6 +19,7 @@ import {
   badgeClass,
   GROUPS,
   historyEntries,
+  noBuildYet,
   numbered,
   pieceLabels,
   plural,
@@ -203,6 +204,18 @@ describe("history of a build", () => {
     ]);
     expect(badgeClass("building")).toBe("badge badge-active");
     expect(badgeClass("released")).toBe("badge badge-delivered");
+  });
+});
+
+describe("the Build section before a result", () => {
+  it("says work has started once it is building, and otherwise that nothing is built", () => {
+    expect(noBuildYet("building")).toBe(
+      "Work has started. No build result has been recorded yet.",
+    );
+    // A new version agreed after a build also waits for one.
+    expect(noBuildYet("agreed")).toBe(
+      "Nothing built from the version agreed now yet.",
+    );
   });
 });
 

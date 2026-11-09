@@ -1,7 +1,8 @@
 // The viewer's HTTP handler: read-only, local only, and strict about who may
 // call it.
 import { describe, expect, it } from "../domain/test_bdd.ts";
-import { agreedRequest } from "../domain/test_fixtures.ts";
+import { agreedRequest, builder } from "../domain/test_fixtures.ts";
+import { startBuilding } from "../domain/index.ts";
 import { toWebRequest, toWebSummary } from "../capture/views.ts";
 import { handleViewerRequest, type ViewerDeps } from "./server.ts";
 
@@ -69,6 +70,20 @@ describe("viewer server", () => {
     expect(one).toContain("<title>#1 Stock counts — Capture</title>");
     expect(one).toContain("We count stock every Friday.");
     expect(one).toContain('<script src="/app.js"></script>');
+  });
+
+  it("shows the Build section once building has started, with no result yet", async () => {
+    const page = async (request: typeof stored.request) =>
+      await (await handleViewerRequest(
+        get("/requests/r-1"),
+        deps({ request: () => toWebRequest({ ...stored, request }) }),
+      )).text();
+    expect(await page(agreedRequest())).not.toContain("build-heading");
+    expect(
+      await page(
+        startBuilding(agreedRequest(), builder, "2026-10-23T13:00:00.000Z"),
+      ),
+    ).toContain("Work has started. No build result has been recorded yet.");
   });
 
   it("answers a request there is no record of with a page saying so", async () => {
