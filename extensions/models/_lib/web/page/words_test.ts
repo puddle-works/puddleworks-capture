@@ -1,9 +1,5 @@
-// The page's pure parts: which view a path shows, and the history timeline.
-import {
-  describe,
-  expect,
-  it,
-} from "../../extensions/models/_lib/domain/test_bdd.ts";
+// The page's words: the list's groups and the history timeline.
+import { describe, expect, it } from "../../domain/test_bdd.ts";
 import {
   agreedRequest,
   builder,
@@ -12,38 +8,23 @@ import {
   owner,
   releasingResult,
   T2,
-} from "../../extensions/models/_lib/domain/test_fixtures.ts";
+} from "../../domain/test_fixtures.ts";
 import {
   editDetails,
   recordBuildResult,
   recordExport,
-} from "../../extensions/models/_lib/domain/index.ts";
-import { toWebRequest } from "../../extensions/models/_lib/capture/views.ts";
+} from "../../domain/index.ts";
+import { toWebRequest } from "../../capture/views.ts";
 import {
   badgeClass,
+  GROUPS,
   historyEntries,
   numbered,
   pieceLabels,
   plural,
-  routeOf,
   SHOWN_PER_STAGE,
   splitStage,
-  STATUS_GROUPS,
 } from "./words.ts";
-
-describe("routeOf", () => {
-  it("shows the list at / and a request at /requests/<id>", () => {
-    expect(routeOf("/")).toEqual({ page: "list" });
-    expect(routeOf("/requests/r-1")).toEqual({ page: "request", id: "r-1" });
-    expect(routeOf("/requests/a%20b")).toEqual({ page: "request", id: "a b" });
-  });
-
-  it("shows nothing for any other path", () => {
-    expect(routeOf("/requests/")).toEqual({ page: "missing" });
-    expect(routeOf("/elsewhere")).toEqual({ page: "missing" });
-    expect(routeOf("/requests/%E0")).toEqual({ page: "missing" });
-  });
-});
 
 describe("numbered", () => {
   it("puts the request's number before its title, when it has one", () => {
@@ -209,7 +190,7 @@ describe("history of a build", () => {
   });
 
   it("lists building and released after agreed, with their own badges", () => {
-    expect(STATUS_GROUPS.map(([s]) => s)).toEqual([
+    expect(GROUPS.flatMap((g) => g.statuses)).toEqual([
       "draft",
       "discussing",
       "ready_for_agreement",
@@ -218,6 +199,7 @@ describe("history of a build", () => {
       "released",
       "withdrawn",
       "declined",
+      "duplicate",
     ]);
     expect(badgeClass("building")).toBe("badge badge-active");
     expect(badgeClass("released")).toBe("badge badge-delivered");
@@ -232,40 +214,73 @@ describe("words", () => {
   });
 });
 
-describe("splitStage", () => {
+describe("the list's groups", () => {
+  const group = (key: string) => GROUPS.find((g) => g.key === key)!;
   const req = (n: number | null, day: number) => ({
     id: n === null ? `old-${day}` : `#${n}`,
     number: n,
     updatedAt: `2026-10-${String(day).padStart(2, "0")}T09:00:00.000Z`,
   });
   const ids = (rs: { id: string }[]) => rs.map((r) => r.id);
+  // Numbered against the day, so an order by number and one by date differ.
+  const mixed = [3, 9, 1, 7, 5, 8, 2].map((day) => req(10 - day, day));
 
-  it("shows five in other stages, last updated first, and keeps the rest for show all", () => {
-    expect(SHOWN_PER_STAGE).toBe(5);
-    const group = [3, 9, 1, 7, 5, 8, 2].map((day) => req(10 - day, day));
-    const { shown, rest } = splitStage("agreed", group);
-    expect(ids(shown)).toEqual(["#1", "#2", "#3", "#5", "#7"]);
-    expect(ids(rest)).toEqual(["#8", "#9"]);
+  it("are named after your next step, closed last and folded away", () => {
+    expect(GROUPS.map((g) => [g.heading, g.statuses])).toEqual([
+      ["Inbox", ["draft"]],
+      ["In progress", ["discussing"]],
+      ["To review", ["ready_for_agreement"]],
+      ["Ready to build", ["agreed"]],
+      ["Building", ["building"]],
+      ["Released", ["released"]],
+      ["Closed", ["withdrawn", "declined", "duplicate"]],
+    ]);
+    expect(GROUPS.filter((g) => g.folded).map((g) => g.key)).toEqual([
+      "closed",
+    ]);
   });
 
-  it("puts being discussed in number order, highest first, whenever each was updated", () => {
+  it("put the longest waiting first in the inbox, to review and ready to build", () => {
+    expect(SHOWN_PER_STAGE).toBe(5);
+    for (const key of ["inbox", "to-review", "ready-to-build"]) {
+      const { shown, rest } = splitStage(group(key), mixed);
+      expect(ids(shown)).toEqual(["#9", "#8", "#7", "#5", "#3"]);
+      expect(ids(rest)).toEqual(["#2", "#1"]);
+    }
+  });
+
+  it("put the last updated first in building and released", () => {
+    for (const key of ["building", "released"]) {
+      const { shown, rest } = splitStage(group(key), mixed);
+      expect(ids(shown)).toEqual(["#1", "#2", "#3", "#5", "#7"]);
+      expect(ids(rest)).toEqual(["#8", "#9"]);
+    }
+  });
+
+  it("put in progress in number order, highest first, whenever each was updated", () => {
     // #2 was updated last and #9 longest ago; neither moves.
-    const group = [[4, 3], [9, 1], [2, 28], [7, 5], [5, 2], [8, 4], [3, 6]]
+    const items = [[4, 3], [9, 1], [2, 28], [7, 5], [5, 2], [8, 4], [3, 6]]
       .map(([n, day]) => req(n, day));
-    const { shown, rest } = splitStage("discussing", group);
+    const { shown, rest } = splitStage(group("in-progress"), items);
     expect(ids(shown)).toEqual(["#9", "#8", "#7", "#5", "#4"]);
     expect(ids(rest)).toEqual(["#3", "#2"]);
   });
 
-  it("puts being discussed requests without a number last, last updated first", () => {
-    const group = [req(null, 20), req(1, 2), req(null, 25), req(3, 1)];
-    const { shown } = splitStage("discussing", group);
+  it("put in progress requests without a number last, last updated first", () => {
+    const items = [req(null, 20), req(1, 2), req(null, 25), req(3, 1)];
+    const { shown } = splitStage(group("in-progress"), items);
     expect(ids(shown)).toEqual(["#3", "#1", "old-25", "old-20"]);
   });
 
-  it("keeps nothing back when a stage has five or fewer", () => {
+  it("keep every closed request behind show, last updated first", () => {
+    const { shown, rest } = splitStage(group("closed"), [req(1, 2), req(2, 9)]);
+    expect(shown).toEqual([]);
+    expect(ids(rest)).toEqual(["#2", "#1"]);
+  });
+
+  it("keep nothing back when a group has five or fewer", () => {
     const { shown, rest } = splitStage(
-      "draft",
+      group("inbox"),
       [1, 2, 3, 4, 5].map((n) => req(n, n)),
     );
     expect(shown.length).toBe(5);

@@ -1,15 +1,7 @@
-// The words the page uses for Capture's codes, which path shows which view,
-// and the history timeline, in one place. Nothing here touches the DOM, so
-// words_test runs it under deno test.
-import type {
-  ExportFormat,
-  Recipe,
-  Role,
-} from "../../extensions/models/_lib/domain/model.ts";
-import type {
-  RequestStatus,
-  WebRequest,
-} from "../../extensions/models/_lib/capture/view_types.ts";
+// The words the page uses for Capture's codes, the list's groups and the
+// history timeline, in one place.
+import type { ExportFormat, Recipe, Role } from "../../domain/model.ts";
+import type { RequestStatus, WebRequest } from "../../capture/view_types.ts";
 
 export const STATUS: Record<RequestStatus, string> = {
   draft: "Draft",
@@ -20,21 +12,64 @@ export const STATUS: Record<RequestStatus, string> = {
   released: "Released",
   withdrawn: "Withdrawn",
   declined: "Declined",
+  duplicate: "Duplicate",
 };
 
-/** Headings for the request list, in the order a request moves through them. */
-export const STATUS_GROUPS: [RequestStatus, string][] = [
-  ["draft", "Drafts"],
-  ["discussing", "Being discussed"],
-  ["ready_for_agreement", "Ready for agreement"],
-  ["agreed", "Agreed"],
-  ["building", "Building"],
-  ["released", "Released"],
-  ["withdrawn", "Withdrawn"],
-  ["declined", "Declined"],
+/** How a group of the list is ordered. */
+type Order = "oldest" | "newest" | "highestNumber";
+
+export interface Group {
+  key: string;
+  heading: string;
+  statuses: RequestStatus[];
+  order: Order;
+  /** Folded away behind "Show" until opened. */
+  folded?: boolean;
+}
+
+/** The list's groups, named after your next step, in the order you take them. */
+export const GROUPS: Group[] = [
+  { key: "inbox", heading: "Inbox", statuses: ["draft"], order: "oldest" },
+  {
+    key: "in-progress",
+    heading: "In progress",
+    statuses: ["discussing"],
+    order: "highestNumber",
+  },
+  {
+    key: "to-review",
+    heading: "To review",
+    statuses: ["ready_for_agreement"],
+    order: "oldest",
+  },
+  {
+    key: "ready-to-build",
+    heading: "Ready to build",
+    statuses: ["agreed"],
+    order: "oldest",
+  },
+  {
+    key: "building",
+    heading: "Building",
+    statuses: ["building"],
+    order: "newest",
+  },
+  {
+    key: "released",
+    heading: "Released",
+    statuses: ["released"],
+    order: "newest",
+  },
+  {
+    key: "closed",
+    heading: "Closed",
+    statuses: ["withdrawn", "declined", "duplicate"],
+    order: "newest",
+    folded: true,
+  },
 ];
 
-/** How many requests each stage of the list shows before "Show all". */
+/** How many requests each group of the list shows before "Show all". */
 export const SHOWN_PER_STAGE = 5;
 
 type Sortable = { number: number | null; updatedAt: string };
@@ -48,22 +83,23 @@ const highestNumberFirst = (a: Sortable, b: Sortable) =>
     ? lastUpdatedFirst(a, b)
     : (b.number ?? -Infinity) - (a.number ?? -Infinity);
 
+const ORDER: Record<Order, (a: Sortable, b: Sortable) => number> = {
+  oldest: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
+  newest: lastUpdatedFirst,
+  highestNumber: highestNumberFirst,
+};
+
 /**
- * A stage's requests in its order, split into the first few and the rest.
- * Being discussed goes by request number; every other stage puts the last
- * updated first.
+ * A group's requests in its order, split into the first few and the rest. A
+ * folded group shows none until opened.
  */
 export function splitStage<T extends Sortable>(
-  status: RequestStatus,
-  group: T[],
+  group: Group,
+  items: T[],
 ): { shown: T[]; rest: T[] } {
-  const sorted = [...group].sort(
-    status === "discussing" ? highestNumberFirst : lastUpdatedFirst,
-  );
-  return {
-    shown: sorted.slice(0, SHOWN_PER_STAGE),
-    rest: sorted.slice(SHOWN_PER_STAGE),
-  };
+  const sorted = [...items].sort(ORDER[group.order]);
+  const shown = group.folded ? 0 : SHOWN_PER_STAGE;
+  return { shown: sorted.slice(0, shown), rest: sorted.slice(shown) };
 }
 
 const BADGE: Record<RequestStatus, string> = {
@@ -75,6 +111,7 @@ const BADGE: Record<RequestStatus, string> = {
   released: "delivered",
   withdrawn: "closed",
   declined: "closed",
+  duplicate: "closed",
 };
 
 /** A request's title with its number before it, as people refer to it: "#12 Stock counts". */
@@ -134,25 +171,6 @@ export function pieceLabels(pieces: Recipe["pieces"]): string[] {
 /** "ready_for_agreement" → "ready for agreement" */
 export const words = (code: string) => code.replaceAll("_", " ");
 
-export type Route = { page: "list" } | { page: "request"; id: string } | {
-  page: "missing";
-};
-
-/** The view a path shows: the server serves the page on / and /requests/<id>. */
-export function routeOf(pathname: string): Route {
-  let parts: string[];
-  try {
-    parts = pathname.split("/").filter((p) => p !== "").map(decodeURIComponent);
-  } catch {
-    return { page: "missing" };
-  }
-  if (parts.length === 0) return { page: "list" };
-  if (parts.length === 2 && parts[0] === "requests") {
-    return { page: "request", id: parts[1] };
-  }
-  return { page: "missing" };
-}
-
 export interface HistoryEntry {
   label: string;
   by: string;
@@ -171,6 +189,7 @@ const ACTION: Record<string, string> = {
   release: "Released",
   import: "Imported",
   editDetails: "Details changed",
+  closeAsDuplicate: "Closed as a duplicate",
 };
 
 /** Every state change or change to the details, who made it and when, after the request was raised. */
@@ -200,6 +219,9 @@ export function historyEntries(request: WebRequest): HistoryEntry[] {
       if (b?.result.published && t.action === "release") {
         label = `Released ${b.result.extension} ${b.result.published.version}`;
       }
+    }
+    if (t.action === "closeAsDuplicate" && request.duplicateOf) {
+      label = `Closed as a duplicate of ${numbered(request.duplicateOf)}`;
     }
     if (t.action === "export") {
       const exported = request.exports.find((e) => e.exportedAt === t.at);

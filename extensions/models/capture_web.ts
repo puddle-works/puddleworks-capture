@@ -2,10 +2,11 @@
  * @puddleworks/capture/web — a read-only page showing Capture's requests
  *
  * `serve` shows every request of one `@puddleworks/capture/requests`
- * behavior on 127.0.0.1: the list grouped by state, and each request's
+ * behavior on 127.0.0.1: the list grouped by your next step, and each request's
  * details, people, discussion, specification versions and history. It only
  * reads; every change goes through the requests behavior's methods. The page
- * reloads as the data changes.
+ * is rendered as HTML on the server and reloads as the data changes; no
+ * route serves request data as JSON.
  *
  * @module
  */
