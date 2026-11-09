@@ -288,6 +288,7 @@ function Version({ spec }: { spec: Spec }) {
           </dl>
         )}
       <RecipeView recipe={content.recipe} />
+      <EffectsView effects={content.effects} />
       {spec.basedOnMessageIds.length > 0 && (
         <p class="card-meta">
           Draws on {plural(spec.basedOnMessageIds.length, "decision")}{" "}
@@ -339,6 +340,25 @@ function RecipeView({ recipe }: { recipe: Spec["content"]["recipe"] }) {
           items={recipe.candidateExtensions}
         />
       )}
+    </>
+  );
+}
+
+/** Whether it only reads or also changes things. None counts as changing things. */
+function EffectsView({ effects }: { effects: Spec["content"]["effects"] }) {
+  return (
+    <>
+      <h3>Reads or writes</h3>
+      {!effects
+        ? <p class="empty">Not said, so it counts as changing things.</p>
+        : effects.kind === "read"
+        ? <p>It only reads; it changes nothing.</p>
+        : (
+          <>
+            <p>It changes things:</p>
+            <ul>{effects.changes.map((c, n) => <li key={n}>{c}</li>)}</ul>
+          </>
+        )}
     </>
   );
 }

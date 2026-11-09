@@ -705,7 +705,7 @@ export const model = {
           (v) => (typeof v === "string" ? JSON.parse(v) : v),
           SpecificationContentSchema,
         ).describe(
-          "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions, acceptanceCriteria [{id, text}] and recipe {examples [{phrase, answer}], pieces [{name, shape: int, repo or word}], whenEmpty, candidateExtensions}, as an object or JSON text. Leave recipe out to keep the one there. A requested phrase must stay the recipe's first example.",
+          "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions, acceptanceCriteria [{id, text}] and recipe {examples [{phrase, answer}], pieces [{name, shape: int, repo or word}], whenEmpty, candidateExtensions} and effects {kind: read or write, changes: what it changes, needed for write}, as an object or JSON text. Leave recipe or effects out to keep the one there; a spec with no effects counts as write. A requested phrase must stay the recipe's first example.",
         ),
         basedOnMessageIds: z.array(z.string()).default([]).describe(
           "The messages it draws on.",

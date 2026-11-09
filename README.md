@@ -110,6 +110,27 @@ and `requestList` data; `agree` writes `outcomeSpec`, and `export_outcome_spec`
 writes it again, or `outcomeSpecMarkdown`, recording the export without moving
 the request on. A request an older Capture saved as Exported reads as Agreed.
 
+### Reads or writes
+
+A specification can also say whether the outcome only reads, or changes things,
+and what it changes, so whatever acts on it knows whether to ask first. It is
+part of what is agreed, so changing it after agreement takes a new version.
+
+```json
+"effects": {
+  "kind": "write",
+  "changes": ["deletes merged git branches", "removes git worktrees"]
+}
+```
+
+`kind` is `read` or `write`; `changes` names each change in plain words, is
+needed for `write` and must be empty for `read`. It is optional, and a spec
+without it counts as `write`, so a missing field is never taken as safe. An
+`edit_specification` that leaves it out keeps the one already there. The
+exported `outcome-spec/v1` carries it as the optional `specification.effects`,
+the Markdown has a "Reads or writes" section, and the page shows it with the
+spec.
+
 ### Record what was built
 
 Agreed means ready to build. A factory builds from the outcome spec and writes a
