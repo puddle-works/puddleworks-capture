@@ -22,7 +22,7 @@ import type {
   WebOverview,
   WebRequest,
 } from "../capture/view_types.ts";
-import { renderPage } from "./page/layout.tsx";
+import { renderPage } from "./page/layout.ts";
 
 /** One file of the page, as build.ts embeds it. */
 export interface ViewerAsset {

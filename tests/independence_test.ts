@@ -45,16 +45,19 @@ Deno.test("never mentions the other Puddleworks apps or their vaults", () => {
 Deno.test("never calls a request a puddle", () => {
   // assets.ts is the page minified, built from web/src, which is scanned.
   const source = code.filter((path) => !path.endsWith("_lib/web/assets.ts"));
-  const hits = source.flatMap((path) =>
-    Deno.readTextFileSync(path)
-      .split("\n")
-      .map((line, i) => ({ line, where: `${at(path)}:${i + 1}` }))
-      .filter(({ line }) =>
+  // The page writes the wordmark with h(): "puddle ", then the accent span.
+  const wordmark = (line: string, next = "") =>
+    line.trim() === '"puddle ",' && next.includes('"brand-accent" }, "works"');
+  const hits = source.flatMap((path) => {
+    const lines = Deno.readTextFileSync(path).split("\n");
+    return lines
+      .map((line, i) => ({ line, i, where: `${at(path)}:${i + 1}` }))
+      .filter(({ line, i }) =>
         /\bpuddles?\b(?! <span class(Name)?="brand-accent">works<\/span>)/i
-          .test(line)
+          .test(line) && !wordmark(line, lines[i + 1])
       )
-      .map(({ where }) => where)
-  );
+      .map(({ where }) => where);
+  });
   assertEquals(hits, []);
 });
 

@@ -4,7 +4,7 @@ import type { ViewerAsset } from "./server.ts";
 
 /** A digest of the build's inputs; web/assets_test checks it is current. */
 export const VIEWER_SOURCE_DIGEST =
-  "sha256:696d00bf8d749a2a38bc381772b7181c60496159eb5ef748487cdd7a51e49a91";
+  "sha256:7262b3d24cfe3117826c8b2cb2d0bd83a165b73977c80954fe52d6e9f1dbcba8";
 
 /** The viewer page's files by served name. */
 export const VIEWER_ASSETS: Readonly<Record<string, ViewerAsset>> = {
