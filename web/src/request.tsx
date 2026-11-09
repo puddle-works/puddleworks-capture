@@ -7,6 +7,7 @@ import type {
   WebRequest,
 } from "../../extensions/models/_lib/capture/view_types.ts";
 import * as api from "./api.ts";
+import { RequestLinks } from "./list.tsx";
 import { Link } from "./nav.tsx";
 import {
   badgeClass,
@@ -71,7 +72,18 @@ function Request({ request: r }: { request: WebRequest }) {
           {r.openQuestionCount > 0 && (
             <span>{plural(r.openQuestionCount, "open question")}</span>
           )}
+          {r.duplicates.length > 0 && (
+            <span>
+              Asked {r.duplicates.length + 1} times:{" "}
+              <RequestLinks refs={r.duplicates} />
+            </span>
+          )}
         </div>
+        {r.duplicateOf && (
+          <p class="closed-reason">
+            A duplicate of <RequestLinks refs={[r.duplicateOf]} />
+          </p>
+        )}
         {r.closedReason && <p class="closed-reason">{r.closedReason}</p>}
         <p class="card-meta request-id">
           <code>{r.id}</code>

@@ -20,6 +20,7 @@ import type { Stored } from "./ports.ts";
 import { specificationEtag } from "./services.ts";
 import type {
   PersonRef,
+  RequestRef,
   WebBuildResult,
   WebRequest,
   WebSummary,
@@ -75,7 +76,27 @@ export function toRequestView(stored: Stored, viewer: Person) {
 }
 export type RequestView = ReturnType<typeof toRequestView>;
 
-export function toWebSummary({ request, before, number }: Stored): WebSummary {
+const refOf = ({ request, number }: Stored): RequestRef => ({
+  id: request.id,
+  number,
+  title: request.title,
+});
+
+/**
+ * A request for the list. `all` is every request, which the duplicates
+ * pointing at this one, and the one it repeats, are found in.
+ */
+export function toWebSummary(stored: Stored, all: Stored[] = []): WebSummary {
+  const { request, before, number } = stored;
+  const target = request.duplicateOf === undefined
+    ? undefined
+    : all.find((s) => s.request.id === request.duplicateOf);
+  const duplicates = all
+    .filter((s) =>
+      s.request.status === "duplicate" && s.request.duplicateOf === request.id
+    )
+    .sort((a, b) => a.request.createdAt.localeCompare(b.request.createdAt))
+    .map(refOf);
   return {
     id: request.id,
     number,
@@ -86,6 +107,8 @@ export function toWebSummary({ request, before, number }: Stored): WebSummary {
     openQuestionCount: openQuestions(request).length,
     specificationVersion: latestSpecification(request)?.version ?? null,
     imported: before !== null,
+    duplicateOf: target ? refOf(target) : null,
+    duplicates,
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
   };
@@ -107,11 +130,11 @@ function webBuildResult(
 }
 
 /** Everything on the request except what the viewer has no use for: idempotency keys and the legacy record. */
-export function toWebRequest(stored: Stored): WebRequest {
+export function toWebRequest(stored: Stored, all: Stored[] = []): WebRequest {
   const { request } = stored;
   const current = currentBuild(request);
   return {
-    ...toWebSummary(stored),
+    ...toWebSummary(stored, all),
     initialDescription: request.initialDescription,
     currentProcess: request.currentProcess,
     requestedPhrase: request.requestedPhrase ?? null,

@@ -166,6 +166,18 @@ spec's recipe.
 
 It replaces `@puddleworks/capture-client`, which called the Node app's API.
 
+A tool often logs the same need more than once, and each time it is a new draft.
+Close a repeat with `close_as_duplicate`, naming the request it repeats with
+`of`. The outcome owner or any builder can, while the repeat is a draft or still
+open, and the request it repeats must not be closed. The repeat moves to
+Duplicate, and the page shows the other request as "asked N times", linked to
+each repeat:
+
+```bash
+swamp behavior run capture close_as_duplicate --input id=14 --input of=9 \
+  --input as=bea@example.com
+```
+
 ### Have an agent review the spec
 
 Once a specification is proposed it is frozen for agreement. An agent that never

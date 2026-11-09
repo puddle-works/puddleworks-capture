@@ -2,6 +2,7 @@ import { describe, expect, it } from "./test_bdd.ts";
 import {
   ACTIONS,
   agree,
+  closeAsDuplicate,
   decline,
   DomainError,
   recordExport,
@@ -22,6 +23,7 @@ import {
   draftRequest,
   owner,
   readyRequest,
+  stranger,
   T2,
 } from "./test_fixtures.ts";
 
@@ -58,7 +60,8 @@ describe("transition table", () => {
   });
 
   it("reaches every status from draft", () => {
-    const seen = new Set(["draft"]);
+    // closeAsDuplicate reaches duplicate from a draft; see request.ts.
+    const seen = new Set(["draft", "duplicate"]);
     let grew = true;
     while (grew) {
       grew = false;
@@ -190,5 +193,47 @@ describe("a request saved before agreeing was the hand-off", () => {
   it("leaves any other request as it is", () => {
     const r = agreedRequest();
     expect(upgradeRequest(r)).toBe(r);
+  });
+});
+
+describe("closing as a duplicate", () => {
+  const other = (status: Request["status"] = "discussing"): Request => ({
+    ...discussingRequest(),
+    id: "r-2",
+    status,
+  });
+
+  it("closes a draft or an open request, recording which one it repeats", () => {
+    for (const r of [draftRequest(), discussingRequest(), agreedRequest()]) {
+      const closed = closeAsDuplicate(r, other(), owner, T2);
+      expect(closed.status).toBe("duplicate");
+      expect(closed.duplicateOf).toBe("r-2");
+      expect(closed.transitions.at(-1)).toMatchObject({
+        from: r.status,
+        to: "duplicate",
+        action: "closeAsDuplicate",
+        by: owner.userId,
+      });
+    }
+  });
+
+  it("lets a builder close someone else's draft, but nobody else", () => {
+    expect(closeAsDuplicate(draftRequest(), other(), builder, T2).status)
+      .toBe("duplicate");
+    expect(() => closeAsDuplicate(draftRequest(), other(), stranger, T2))
+      .toThrowError(expect.objectContaining({ code: "not_allowed" }));
+  });
+
+  it("refuses a closed request, itself, or a closed target", () => {
+    const declined = { ...discussingRequest(), status: "declined" as const };
+    expect(() => closeAsDuplicate(declined, other(), owner, T2))
+      .toThrowError(expect.objectContaining({ code: "invalid_state" }));
+    const r = discussingRequest();
+    expect(() => closeAsDuplicate(r, r, owner, T2))
+      .toThrowError(expect.objectContaining({ code: "invalid_input" }));
+    for (const s of TERMINAL_STATUSES) {
+      expect(() => closeAsDuplicate(r, other(s), owner, T2))
+        .toThrowError(expect.objectContaining({ code: "invalid_state" }));
+    }
   });
 });

@@ -650,6 +650,16 @@ export const model = {
       }),
       (s, who, a) => s.decline(who, a.id, a.reason),
     ),
+    close_as_duplicate: change(
+      "Close a request that repeats another, such as a need a tool logged again. Its outcome owner or a builder can, while it is a draft or still open. The other request must not be closed, and counts it as asked again.",
+      "Closed as a duplicate",
+      withId.extend({
+        of: z.string().trim().min(1).describe(
+          "The request this one repeats: its number (12 or #12) or its id.",
+        ),
+      }),
+      (s, who, a) => s.closeAsDuplicate(who, a.id, a.of),
+    ),
 
     invite: change(
       "Invite someone in the people list onto a request, as a builder, an observer or a reviewer.",
