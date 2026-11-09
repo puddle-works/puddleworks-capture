@@ -34,7 +34,7 @@ export const TRANSITIONS: Record<
     to: "withdrawn",
   },
   decline: { from: ["discussing", "ready_for_agreement"], to: "declined" },
-  // Recording a build result takes these; see build.ts.
+  // Starting to build, or recording a build result, takes these; see build.ts.
   build: { from: ["agreed", "released"], to: "building" },
   release: { from: ["agreed", "building"], to: "released" },
 };

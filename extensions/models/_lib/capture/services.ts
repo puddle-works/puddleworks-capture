@@ -40,6 +40,7 @@ import {
   roleOf,
   specHashInput,
   type SpecificationContent,
+  startBuilding,
   submit,
   toMarkdown,
   toOutcomeSpecV1,
@@ -288,6 +289,8 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       mutate(as, id, (r, p, at) => submit(r, p, at)),
     withdraw: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => withdraw(r, p, reason, at)),
+    startBuilding: (as: string, id: string) =>
+      mutate(as, id, (r, p, at) => startBuilding(r, p, at)),
     decline: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => decline(r, p, reason, at)),
 
