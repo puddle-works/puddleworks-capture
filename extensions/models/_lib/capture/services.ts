@@ -5,6 +5,7 @@
 import {
   agree,
   canRead,
+  closeAsDuplicate,
   createRequest,
   decline,
   DomainError,
@@ -42,6 +43,7 @@ import {
   specHashInput,
   type SpecificationContent,
   SpecificationContentSchema,
+  startBuilding,
   submit,
   toMarkdown,
   toOutcomeSpecV1,
@@ -290,8 +292,43 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       mutate(as, id, (r, p, at) => submit(r, p, at)),
     withdraw: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => withdraw(r, p, reason, at)),
+    startBuilding: (as: string, id: string) =>
+      mutate(as, id, (r, p, at) => startBuilding(r, p, at)),
     decline: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => decline(r, p, reason, at)),
+
+    /** Any builder may close a repeat, including a draft they can't read otherwise. */
+    async closeAsDuplicate(
+      as: string,
+      id: string,
+      of: string,
+    ): Promise<Stored> {
+      const person = await actor(as);
+      const visible = async (ref: string) => {
+        const found = await find(ref);
+        if (found && (person.isBuilder || canRead(found.request, person))) {
+          return found;
+        }
+        throw new DomainError(
+          "not_found",
+          `There is no request ${ref}, or it isn't shared with you.`,
+        );
+      };
+      const stored = await visible(id);
+      const target = await visible(of);
+      const saved = {
+        ...stored,
+        request: closeAsDuplicate(
+          stored.request,
+          target.request,
+          person,
+          clock(),
+        ),
+        version: stored.version + 1,
+      };
+      await store.saveRequest(saved);
+      return saved;
+    },
     propose: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => propose(r, p, at)),
     requestChanges: (as: string, id: string, note: string) =>

@@ -2,10 +2,11 @@
  * @puddleworks/capture/web — a read-only page showing Capture's requests
  *
  * `serve` shows every request of one `@puddleworks/capture/requests`
- * behavior on 127.0.0.1: the list grouped by state, and each request's
+ * behavior on 127.0.0.1: the list grouped by your next step, and each request's
  * details, people, discussion, specification versions and history. It only
  * reads; every change goes through the requests behavior's methods. The page
- * reloads as the data changes.
+ * is rendered as HTML on the server and reloads as the data changes; no
+ * route serves request data as JSON.
  *
  * @module
  */
@@ -25,7 +26,7 @@ export type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 /** The behavior type: serves the read-only Capture page. */
 export const model = {
   type: "@puddleworks/capture/web",
-  version: "2026.11.04.1",
+  version: "2026.11.09.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -85,6 +86,12 @@ export const model = {
       toVersion: "2026.11.04.1",
       description:
         "The history shows changes to the details; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.09.1",
+      description:
+        "A Building request with no results says work has started; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

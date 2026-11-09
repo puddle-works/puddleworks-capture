@@ -679,6 +679,65 @@ describe("@puddleworks/capture/requests", () => {
     }
   });
 
+  it("marks an agreed request building before any result, and only once", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    await run("submit", { id });
+    await run("join_request", { as: "bea@example.com", id });
+    await run("edit_specification", { id, specification: goodSpec });
+    await run("propose", { id });
+    const bea = { as: "bea@example.com", id };
+    await expect.rejects(
+      run("start_building", bea),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "Can't start building a request that is ready for agreement; it must be agreed.",
+        ),
+      }),
+    );
+    await run("agree", { id, version: "1" });
+    // The outcome owner asked for it; a builder does the building.
+    await expect.rejects(
+      run("start_building", { id }),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "As the outcome owner you can't start building.",
+        ),
+      }),
+    );
+    await run("start_building", bea);
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "building" });
+    expect(swamp.logs.at(-1)).toBe(
+      `Started building request #1 (${id}): now building, version 7`,
+    );
+    await expect.rejects(
+      run("start_building", bea),
+      expect.objectContaining({
+        message: expect.stringContaining(
+          "Can't start building a request that is building; it must be agreed.",
+        ),
+      }),
+    );
+    // A result for it afterwards keeps it building.
+    const agreed = swamp.data(`request-${id}`)!;
+    await run("record_build_result", {
+      result: releasingResult({
+        source: {
+          url: `http://127.0.0.1:3002/requests/${id}`,
+          version: 1,
+          specHash: (agreed.agreements as { specHash: string }[])[0].specHash,
+        },
+        published: undefined,
+      }),
+    });
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "building" });
+  });
+
   it("says why a published build isn't released yet", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);

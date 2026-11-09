@@ -88,7 +88,7 @@ function replaceLatest(
 
 /**
  * Saves the draft: edits the latest draft version, or starts the next one.
- * Content with no recipe keeps the one the latest version has.
+ * Content with no recipe, or no effects, keeps the one the latest version has.
  */
 export function editSpecification(
   request: Request,
@@ -115,7 +115,12 @@ export function editSpecification(
   }
   const latest = latestSpecification(request);
   const recipe = parsed.data.recipe ?? latest?.content.recipe;
-  const edited = recipe ? { ...parsed.data, recipe } : parsed.data;
+  const effects = parsed.data.effects ?? latest?.content.effects;
+  const edited = {
+    ...parsed.data,
+    ...(recipe && { recipe }),
+    ...(effects && { effects }),
+  };
   requirePhraseKept(edited, request.requestedPhrase);
   if (latest?.status === "draft") {
     return {

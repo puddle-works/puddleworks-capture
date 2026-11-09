@@ -136,6 +136,17 @@ function recipeSection(doc: OutcomeSpecV1): string {
   ].filter(Boolean).join("\n\n");
 }
 
+/** Whether it reads or writes, in words. None is taken as changing things. */
+export function effectsWords(
+  effects: OutcomeSpecV1["specification"]["effects"],
+) {
+  if (!effects) {
+    return "Not said, so treat it as changing things: ask before running it.";
+  }
+  if (effects.kind === "read") return "It only reads; it changes nothing.";
+  return `It changes things:\n\n${bullets(effects.changes)}`;
+}
+
 /** The same document as Markdown, for pasting into any process. */
 export function toMarkdown(doc: OutcomeSpecV1): string {
   const s = doc.specification;
@@ -166,6 +177,7 @@ export function toMarkdown(doc: OutcomeSpecV1): string {
     `## Assumptions\n\n${bullets(s.assumptions)}`,
     `## Acceptance criteria\n\n${criteria}`,
     `## Recipe\n\n${recipeSection(doc)}`,
+    `## Reads or writes\n\n${effectsWords(s.effects)}`,
     `## Open questions\n\n${questions}`,
     `## How it is done today\n\n${
       doc.request.currentProcess || "Not described."

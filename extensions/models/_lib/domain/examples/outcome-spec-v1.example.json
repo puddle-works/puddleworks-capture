@@ -62,6 +62,12 @@
       "pieces": [],
       "whenEmpty": "Nothing needs reordering.",
       "candidateExtensions": []
+    },
+    "effects": {
+      "kind": "write",
+      "changes": [
+        "Writes the reorder list to the shop's spreadsheet"
+      ]
     }
   },
   "agreement": {
