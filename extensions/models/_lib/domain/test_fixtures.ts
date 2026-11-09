@@ -139,14 +139,44 @@ export function buildResult(
   };
 }
 
-/** Published, with goodSpec's one example passing. */
+/** An example that passed through puddlerouter, as releasingResult's build. */
+export function routedExample(
+  phrase: string,
+  overrides: Partial<NonNullable<BuildResultV1["examples"]>[number]> = {},
+) {
+  return {
+    phrase,
+    passed: true,
+    recipeId: "stock-counts",
+    router: {
+      testedAt: "2026-10-23T12:30:00.000Z",
+      version: "2026.10.23.1",
+      outcome: "answered" as const,
+      source: { url: "http://127.0.0.1:3002/requests/r-1", version: 1 },
+    },
+    ...overrides,
+  };
+}
+
+/**
+ * Published, with goodSpec's one example passing through puddlerouter, by a
+ * recipe for the request the result's source names.
+ */
 export function releasingResult(
   overrides: Partial<BuildResultV1> = {},
 ): BuildResultV1 {
+  const routed = routedExample("what should I order this week");
+  const source = overrides.source ?? buildResult().source!;
   return buildResult({
     pullRequest: "https://github.com/example/stock-counts/pull/1",
     published: { version: "2026.10.23.1", visibility: "public" },
-    examples: [{ phrase: "what should I order this week", passed: true }],
+    examples: [{
+      ...routed,
+      router: {
+        ...routed.router,
+        source: { url: source.url, version: source.version },
+      },
+    }],
     builtAt: "2026-10-23T12:00:00.000Z",
     ...overrides,
   });

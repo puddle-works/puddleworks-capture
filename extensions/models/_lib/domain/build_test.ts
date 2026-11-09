@@ -26,6 +26,7 @@ import {
   owner,
   releasingResult,
   reviewer,
+  routedExample,
   T2,
 } from "./test_fixtures.ts";
 
@@ -243,12 +244,16 @@ describe("released only when every example passes", () => {
         requested: false,
         outcome: "passed",
         detail: null,
+        recipeId: null,
+        router: null,
       },
       {
         phrase: "what should I order next week",
         requested: false,
         outcome: "missing",
         detail: null,
+        recipeId: null,
+        router: null,
       },
     ]);
   });
@@ -286,7 +291,7 @@ describe("released only when every example passes", () => {
       agreedWith(content, phrase),
       builder,
       releasingResult({
-        examples: [{ phrase: "what should I order next week", passed: true }],
+        examples: [routedExample("what should I order next week")],
       }),
       T3,
     );
@@ -388,5 +393,95 @@ describe("after a build", () => {
   it("reads a request saved before build results as having none", () => {
     const { buildResults: _, ...old } = agreedRequest();
     expect(upgradeRequest(old as Request).buildResults).toEqual([]);
+  });
+});
+
+describe("released only once puddlerouter answered each example", () => {
+  const phrase = "what should I order this week";
+  const released = (examples: ReturnType<typeof routedExample>[]) => {
+    const r = recordBuildResult(
+      agreedRequest(),
+      builder,
+      releasingResult({ examples }),
+      T3,
+    );
+    return { status: r.status, problems: releaseProblems(r, currentBuild(r)!) };
+  };
+  const router = routedExample(phrase).router;
+
+  it("releases a published build whose recipe for this request answered through the published version", () => {
+    expect(released([routedExample(phrase)])).toEqual({
+      status: "released",
+      problems: [],
+    });
+    expect(
+      released([routedExample(phrase, {
+        router: { ...router, outcome: "answered-after-yes" },
+      })]).status,
+    ).toBe("released");
+  });
+
+  it("keeps a self-reported pass without router evidence in Building", () => {
+    expect(released([{ phrase, passed: true } as never])).toEqual({
+      status: "building",
+      problems: [
+        `The example "${phrase}" doesn't name the recipe that answers it.`,
+        `The example "${phrase}" wasn't tested through puddlerouter.`,
+      ],
+    });
+  });
+
+  it("needs the version puddlerouter ran to be the one published", () => {
+    expect(
+      released([routedExample(phrase, {
+        router: { ...router, version: "2026.10.22.9" },
+      })]).problems,
+    ).toEqual([
+      `The example "${phrase}" went through puddlerouter with version 2026.10.22.9, not the published 2026.10.23.1.`,
+    ]);
+  });
+
+  it("releases with a recipe built for another request, or one that doesn't say", () => {
+    const { source: _, ...noSource } = router;
+    expect(released([routedExample(phrase, { router: noSource })]).status)
+      .toBe("released");
+    expect(
+      released([routedExample(phrase, {
+        router: {
+          ...router,
+          source: { url: "http://127.0.0.1:3002/requests/r-9", version: 4 },
+        },
+      })]).status,
+    ).toBe("released");
+  });
+
+  it("needs one recipe to answer every example", () => {
+    const r = recordBuildResult(
+      agreedWith(),
+      builder,
+      releasingResult({
+        examples: [
+          routedExample("what should I order this week"),
+          routedExample("what should I order next week", {
+            recipeId: "weekly-orders",
+          }),
+        ],
+      }),
+      T3,
+    );
+    expect(r.status).toBe("building");
+    expect(releaseProblems(r, currentBuild(r)!)).toEqual([
+      "The examples were answered by different recipes (stock-counts, weekly-orders); one recipe answers this request.",
+    ]);
+  });
+
+  it("reads an outcome only as answered or answered-after-yes", () => {
+    const result = releasingResult({
+      examples: [routedExample(phrase, {
+        router: { ...router, outcome: "sent-to-claude" as never },
+      })],
+    });
+    expect(parseBuildResult(result).ok).toBe(false);
+    expect(parseBuildResult(releasingResult()).ok).toBe(true);
   });
 });

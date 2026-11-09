@@ -128,18 +128,38 @@ JSON text or, from a workflow, an object. The outcome owner or a builder may
 record one. Its `source.version` and `source.specHash` must be the agreed
 version's, so a build of something else is refused.
 
-| Status   | When                                                                                                                         |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Building | The first result is recorded, or a newer one isn't released                                                                  |
-| Released | The latest build is published, and every example in the agreed recipe is reported as passed, the requested phrase among them |
+| Status   | When                                                                                                                                                                       |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Building | The first result is recorded, or a newer one isn't released                                                                                                                |
+| Released | The latest build is published, and every example in the agreed recipe is reported as passed through puddlerouter by this request's recipe, the requested phrase among them |
 
 The latest build is the one built last (`builtAt`), whatever order the results
 come in. Released is decided by the result's optional
-`examples: [{ phrase, passed, detail? }]`, which says how the built recipe
-answered each phrase. A phrase the result leaves out counts as not passed, and a
-spec agreed before recipes has no examples, so it can't be released until it is
-revised. While a published build isn't released, the method's log says why.
-Recording the same result again changes nothing.
+`examples: [{ phrase, passed, detail?, recipeId?, router? }]`, which says how
+the built recipe answered each phrase. A phrase the result leaves out counts as
+not passed, and a spec agreed before recipes has no examples, so it can't be
+released until it is revised.
+
+A pass counts only with evidence that puddlerouter answered the phrase:
+
+- `recipeId` names the recipe that answered it, and every example names the same
+  one.
+- `router` is the phrase sent through puddlerouter in the desk: `testedAt`,
+  `version` (the extension's version installed then), `outcome` (`answered`, or
+  `answered-after-yes` for a write recipe that asked for a yes and ran) and
+  `source`, the request the recipe says it answers, as the router's `match` gave
+  it.
+- `router.version` must be the published version.
+
+`router.source` isn't checked: a recipe built for another request may answer
+this one too, such as an existing recipe that already covers it. The page shows
+which request each recipe was built for.
+
+A published build without that evidence stays Building, and "Before it is
+released" on the page lists what is missing. It is still what the build reports
+about itself: Capture doesn't run the router. While a published build isn't
+released, the method's log says why. Recording the same result again changes
+nothing.
 
 From Building or Released the request can be revised, as from Agreed; once the
 new version is agreed, it waits for a build of that. A Building request can be

@@ -469,6 +469,26 @@ function BuildView({ build, released }: { build: Build; released: boolean }) {
                     )}
                   </dt>
                   {e.detail && <dd>{e.detail}</dd>}
+                  {e.router
+                    ? (
+                      <dd class="card-meta">
+                        {e.recipeId ? `Recipe ${e.recipeId}` : "A recipe"},
+                        through puddlerouter with {e.router.version}
+                        {e.router.outcome === "answered-after-yes"
+                          ? " after a yes"
+                          : ""} · {formatTime(e.router.testedAt)}
+                        {e.router.source && (
+                          e.router.source.url === build.result.source?.url
+                            ? " · built for this request"
+                            : ` · built for ${e.router.source.url}`
+                        )}
+                      </dd>
+                    )
+                    : e.outcome === "passed" && (
+                      <dd class="card-meta">
+                        Not tested through puddlerouter.
+                      </dd>
+                    )}
                 </div>
               );
             })}
