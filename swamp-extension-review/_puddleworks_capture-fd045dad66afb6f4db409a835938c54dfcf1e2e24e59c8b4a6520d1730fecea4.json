@@ -1,0 +1,82 @@
+{
+  "extension": "@puddleworks/capture",
+  "version": "2026.11.09.2",
+  "reviewedAt": "2026-11-09T13:40:00Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "The extension holds no credentials and reads no vault. requester, loggedBy and transfer_ownership store people's names and emails, as the people list already did. export_snapshot still writes emails to a new 0600 file only. revise_specification and record_build_result fetch only https URLs, and refuse http."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "Every change method logs through change() with the request number, id, status and version, including the new revise_specification and transfer_ownership. record_build_result logs why a published build isn't released, which now includes missing router evidence. No spec content, reasons or emails beyond the acting person are logged."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "Capture's refusals are DomainErrors in plain words with a code. New ones: a stale basedOnVersion, an outcome spec for another request, a blank reason, an unknown requester (refused before anything is created), a transfer by a non-owner or of a closed request. A refused revise_specification leaves the request unsaved, because the whole revise, edit and propose runs before mutate saves (tested). Malformed JSON text in specification is a SyntaxError from the argument preprocess, as edit_specification already was."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "66 test files' suites pass (270 steps), with deno check, lint and fmt clean, and CI green on main e10dd69. New: effects schema, hash and keep-on-edit; revise_specification from agreed and discussing, stale, mismatched id, observer, not-ready rollback and the agreed export carrying changeSummary; requester ownership, idempotency, unknown requester and transfer; Released with and without router evidence, wrong version, two recipes and a recipe built for another request; the per-section diff including effects. The page was checked rendered. The real swamp CLI was not run for these methods; tests use FakeSwamp."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "create_request's key is still the logging person plus sourceRef, so a retry with requester returns the same request; the owner is not changed on a repeat. Recording the same build result twice changes nothing. revise_specification is not idempotent by design: a second run with the same basedOnVersion is refused as stale, so it can't propose twice."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "outcome-spec/v1 gains two optional fields, specification.effects and specification.changeSummary, which the v1 header allows; the Factory's reader ignores unknown fields (checked). build-result/v1 examples gain optional recipeId and router, agreed with the Factory and merged there (factory#116); Capture's contract test parses the Factory's main example. capture-log-request gains an optional requester with a blank default, so existing callers are unchanged."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "No new handles, timers or subprocesses. readJsonInput reads one file or one https response and closes it. The viewer page is rendered on the server from swamp data, as on main."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Shipped files: README.md, LICENSE, manifest.yaml, capture.ts, capture_web.ts, _lib and both workflows. The README examples use example.com addresses and relative paths only. The manifest description is updated for revise_specification, transfer_ownership, effects, requester and the Released rule."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "EffectsSchema refines kind against changes (write needs at least one, read none). requester accepts only blank or an email. The router outcome is an enum. Reader schemas for build-result/v1 drop unknown fields, as before."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "No new resource specs. request stays infinite with garbageCollection 50."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "pass",
+      "note": "Requests gain a way to change their outcome owner (transfer_ownership) and to revise and propose in one step. Nothing deletes a request; withdraw, decline and duplicate close it, as before."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "Every change checks the acting person's role and the request's status before it writes. revise_specification checks the editSpecification permission and basedOnVersion before revising. create_request resolves the requester in the people list before numbering or saving."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "No new instance names: request-<id>, outcome-spec-<id> and the others are unchanged. revise_specification writes only request-<id>."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "The requests behavior reads only its own data through the store. The viewer reads one requests behavior's data with swamp's data query. No data.latest across apps; Capture still imports nothing from the Factory (independence_test)."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "Both behaviors go from 2026.11.09.1 to 2026.11.09.2 with a no-op upgrades entry that keeps global arguments; capture_test checks the last entry matches the model version and the manifest. Stored requests need no migration: loggedBy, changeSummary, effects, recipeId and router are all optional, so requests saved before read as they did. A request already Released keeps its status; the new rule applies to results recorded after."
+    }
+  ]
+}
