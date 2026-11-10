@@ -12,6 +12,7 @@ import {
   draftRequest,
   owner,
   releasingResult,
+  routerTested,
   stranger,
   T2,
 } from "../domain/test_fixtures.ts";
@@ -188,7 +189,7 @@ describe("duplicates on the page", () => {
 describe("build results on the page", () => {
   it("link a released request to its source and its registry page", () => {
     let r = recordBuildResult(agreedRequest(), builder, buildResult(), T2);
-    r = recordBuildResult(r, builder, releasingResult(), T2);
+    r = routerTested(recordBuildResult(r, builder, releasingResult(), T2));
     const view = toWebRequest(stored(r));
     expect(view.status).toBe("released");
     expect(view.build).toMatchObject({
@@ -203,6 +204,7 @@ describe("build results on the page", () => {
       examples: [{
         phrase: "what should I order this week",
         outcome: "passed",
+        routerTest: { outcome: "answered", note: null },
       }],
       releaseProblems: [],
     });
@@ -221,6 +223,7 @@ describe("build results on the page", () => {
     );
     expect(toWebRequest(stored(r)).build?.releaseProblems).toEqual([
       'The example "what should I order this week" wasn\'t reported.',
+      'The example "what should I order this week" hasn\'t been sent through puddlerouter with version 2026.10.23.1.',
     ]);
   });
 

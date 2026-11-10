@@ -1,5 +1,5 @@
 import { z } from "npm:zod@4.6.5";
-import type { BuildResultV1 } from "./build_result_v1.ts";
+import type { BuildResult, BuildResultV1 } from "./build_result.ts";
 
 export const REQUEST_STATUSES = [
   "draft",
@@ -190,7 +190,31 @@ export interface BuildResultRecord {
   specVersion: number;
   recordedBy: string;
   recordedAt: string;
-  result: BuildResultV1;
+  result: BuildResult;
+}
+
+/** What came back when a phrase was sent through puddlerouter. */
+export const ROUTER_TEST_OUTCOMES = [
+  "answered",
+  "answered-after-yes",
+  "not-answered",
+] as const;
+export type RouterTestOutcome = (typeof ROUTER_TEST_OUTCOMES)[number];
+
+/**
+ * The outcome owner sending the agreed phrases through puddlerouter on their
+ * own desk, with one version of the extension installed.
+ */
+export interface RouterTest {
+  /** The extension version installed when the phrases went through. */
+  version: string;
+  results: {
+    phrase: string;
+    outcome: RouterTestOutcome;
+    note: string | null;
+  }[];
+  recordedBy: string;
+  recordedAt: string;
 }
 
 /** How one example in the agreed recipe came out in a build. */
@@ -200,7 +224,14 @@ export interface ExampleCheck {
   requested: boolean;
   outcome: "passed" | "failed" | "missing";
   detail: string | null;
-  /** The recipe that answered it, and how puddlerouter did; null when not said. */
+  /**
+   * What the outcome owner's router test of the published version said for
+   * it; null before one covers it.
+   */
+  routerTest:
+    | { outcome: RouterTestOutcome; note: string | null; recordedAt: string }
+    | null;
+  /** What a v1 builder reported about puddlerouter; null when not said. */
   recipeId: string | null;
   router: NonNullable<BuildResultV1["examples"]>[number]["router"] | null;
 }
@@ -253,6 +284,8 @@ export interface Request {
   agreements: Agreement[];
   exports: ExportRecord[];
   buildResults: BuildResultRecord[];
+  /** Absent on a request saved before router tests: read it as none. */
+  routerTests?: RouterTest[];
   transitions: Transition[];
   createdAt: string;
   updatedAt: string;

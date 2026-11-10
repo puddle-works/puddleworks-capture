@@ -12,7 +12,8 @@ and the epic puddle-works/puddleworks#207.
 | Takes in                              | Puts out                  |
 | ------------------------------------- | ------------------------- |
 | a request                             | an `outcome-spec/v1` file |
-| a `build-result/v1` file from a build | Building, then Released   |
+| a `build-result/v2` file from a build | Building                  |
+| the outcome owner's router test       | Released                  |
 | a builder starting work               | Building                  |
 
 Capture is the swamp extension `@puddleworks/capture`
@@ -169,10 +170,10 @@ spec.
 ### Record what was built
 
 Agreed means ready to build. A factory builds from the outcome spec and writes a
-[`build-result/v1`](https://github.com/puddle-works/puddleworks-factory/blob/main/docs/contracts/build-result.md)
-file. `record_build_result` records it against the request its `source.url`
-names (`<appUrl>/requests/<id>`, the page the outcome spec gave), so it takes no
-`id`:
+[`build-result/v2`](https://github.com/puddle-works/puddleworks-factory/blob/main/docs/contracts/build-result.md)
+file (v1 is still read). `record_build_result` records it against the request
+its `source.url` names (`<appUrl>/requests/<id>`, the page the outcome spec
+gave), so it takes no `id`:
 
 ```bash
 swamp behavior run capture record_build_result --input as=bea@example.com \
@@ -184,10 +185,26 @@ JSON text or, from a workflow, an object. The outcome owner or a builder may
 record one. Its `source.version` and `source.specHash` must be the agreed
 version's, so a build of something else is refused.
 
-| Status   | When                                                                                                                                                            |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Building | Work is started, the first result is recorded, or a newer one isn't released                                                                                    |
-| Released | The latest build is published, and every example in the agreed recipe is reported as passed through puddlerouter by one recipe, the requested phrase among them |
+Once a build is published, the outcome owner installs that version on their
+desk, sends each agreed phrase through puddlerouter, and records what came back:
+
+```bash
+swamp behavior run capture record_router_test --input as=olive@example.com \
+  --input id=1 --input version=2026.10.23.1 \
+  --input 'results=[{"phrase":"what should I order this week","outcome":"answered"}]'
+```
+
+Each `outcome` is `answered`, `answered-after-yes` (a write recipe asked for a
+yes, then ran) or `not-answered` (it went to Claude, or no recipe answered),
+with an optional `note`. Only the outcome owner can record one, and only for the
+current build's published version. A request a bot logged with no requester is
+handed to the person who asked first, with `transfer_ownership`. Each test
+replaces the last for that version.
+
+| Status   | When                                                                                                                                        |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Building | Work is started, the first result is recorded, or the latest isn't released                                                                 |
+| Released | The latest build is published, its recipe matches the agreed one, and the outcome owner's router test of that version answered every phrase |
 
 When work starts, before there is any result, a builder on the request, or its
 outcome owner when the people list marks them a builder, can mark it Building:
@@ -199,35 +216,31 @@ swamp behavior run capture start_building --input as=bea@example.com --input id=
 It works only while the request is Agreed. An outcome owner who isn't a builder
 can't do it. Results recorded after that keep it Building until one is released.
 A factory that never calls it is unaffected: its first result moves the request
-to Building, or straight to Released.
+to Building.
 
 The latest build is the one built last (`builtAt`), whatever order the results
-come in. Released is decided by the result's optional
-`examples: [{ phrase, passed, detail?, recipeId?, router? }]`, which says how
-the built recipe answered each phrase. A phrase the result leaves out counts as
-not passed, and a spec agreed before recipes has no examples, so it can't be
-released until it is revised.
+come in. It is released when:
 
-A pass counts only with evidence that puddlerouter answered the phrase:
+- its `examples: [{ phrase, passed, detail? }]`, the builder's own check, pass
+  every example in the agreed recipe, the requested phrase among them. A phrase
+  the result leaves out counts as not passed, and a spec agreed before recipes
+  has no examples, so it is revised first;
+- it is published, and its `recipe: { id, phrases, empty }`, copied from the
+  recipe as published, has every agreed phrase exactly as written, and `empty`
+  is exactly the agreed `whenEmpty`. A spec with a blank `whenEmpty` can't be
+  released until it says what the answer is when there is nothing to show;
+- the outcome owner's latest router test of the published version answered every
+  agreed phrase.
 
-- `recipeId` names the recipe that answered it, and every example names the same
-  one.
-- `router` is the phrase sent through puddlerouter in the desk: `testedAt`,
-  `version` (the extension's version installed then), `outcome` (`answered`, or
-  `answered-after-yes` for a write recipe that asked for a yes and ran) and
-  `source`, the request the recipe says it answers, as the router's `match` gave
-  it.
-- `router.version` must be the published version.
+Either method can release the request: the result, when a test of its version is
+already there, or the test. A newer build that publishes another version needs a
+new test, and a failing retest takes a Released request back to Building. A
+build-result/v1 has no `recipe`, so it can't release a request; its `recipeId`
+and `router`, which the builder reported, are shown on the page as that.
 
-`router.source` isn't checked: a recipe built for another request may answer
-this one too, such as an existing recipe that already covers it. The page shows
-which request each recipe was built for.
-
-A published build without that evidence stays Building, and "Before it is
-released" on the page lists what is missing. It is still what the build reports
-about itself: Capture doesn't run the router. While a published build isn't
-released, the method's log says why. Recording the same result again changes
-nothing.
+"Before it is released" on the page lists what is missing, and while a published
+build isn't released, `record_build_result`'s log says why. Recording the same
+result again changes nothing.
 
 From Building or Released the request can be revised, as from Agreed; once the
 new version is agreed, it waits for a build of that. A Building request can be

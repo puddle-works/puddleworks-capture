@@ -659,6 +659,27 @@ function BuildView({ build, released }: {
         h("dt", null, "Run with"),
         h("dd", null, h("code", null, result.entryPointRef)),
       ),
+      h(
+        "div",
+        null,
+        h("dt", null, "Recipe"),
+        "recipe" in result && result.recipe
+          ? h(
+            "dd",
+            null,
+            h("code", null, result.recipe.id),
+            " · when there is nothing to show: “",
+            result.recipe.empty,
+            "”",
+          )
+          : h(
+            "dd",
+            { class: "empty" },
+            result.apiVersion === "puddleworks.dev/build-result/v1"
+              ? "Not given: a build-result/v1 doesn't carry it."
+              : "Not given.",
+          ),
+      ),
     ),
     h("h3", null, "Examples"),
     build.examples.length === 0
@@ -683,11 +704,33 @@ function BuildView({ build, released }: {
                 h("span", { class: "badge badge-draft" }, "Requested"),
             ),
             e.detail && h("dd", null, e.detail),
-            e.router
+            e.routerTest
               ? h(
                 "dd",
                 { class: "card-meta" },
-                e.recipeId ? `Recipe ${e.recipeId}` : "A recipe",
+                e.routerTest.outcome === "not-answered"
+                  ? "Not answered through puddlerouter with "
+                  : "Answered through puddlerouter with ",
+                result.published?.version,
+                e.routerTest.outcome === "answered-after-yes"
+                  ? " after a yes"
+                  : "",
+                e.routerTest.note && `: ${e.routerTest.note}`,
+                " · tested by the outcome owner ",
+                formatTime(e.routerTest.recordedAt),
+              )
+              : result.published &&
+                h(
+                  "dd",
+                  { class: "card-meta" },
+                  "Not sent through puddlerouter by the outcome owner yet.",
+                ),
+            e.router &&
+              h(
+                "dd",
+                { class: "card-meta" },
+                "Reported by the builder: ",
+                e.recipeId ? `recipe ${e.recipeId}` : "a recipe",
                 ", through puddlerouter with ",
                 e.router.version,
                 e.router.outcome === "answered-after-yes" ? " after a yes" : "",
@@ -697,13 +740,7 @@ function BuildView({ build, released }: {
                   (e.router.source.url === build.result.source?.url
                     ? " · built for this request"
                     : ` · built for ${e.router.source.url}`),
-              )
-              : e.outcome === "passed" &&
-                h(
-                  "dd",
-                  { class: "card-meta" },
-                  "Not tested through puddlerouter.",
-                ),
+              ),
           );
         }),
       ),

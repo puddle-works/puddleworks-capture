@@ -27,6 +27,7 @@ import {
   recordBuildResult,
   recordExport,
   recordReview,
+  recordRouterTest,
   removeParticipant,
   type Request,
   requestChanges,
@@ -312,6 +313,11 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       mutate(as, id, (r, p, at) => withdraw(r, p, reason, at)),
     startBuilding: (as: string, id: string) =>
       mutate(as, id, (r, p, at) => startBuilding(r, p, at)),
+    recordRouterTest: (
+      as: string,
+      id: string,
+      test: Parameters<typeof recordRouterTest>[2],
+    ) => mutate(as, id, (r, p, at) => recordRouterTest(r, p, test, at)),
     decline: (as: string, id: string, reason: string) =>
       mutate(as, id, (r, p, at) => decline(r, p, reason, at)),
 
@@ -592,7 +598,7 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     },
 
     /**
-     * Records a build-result/v1 against the request its `source.url` names,
+     * Records a build-result/v1 or /v2 against the request its `source.url` names,
      * which is the page the outcome spec gave. `raw` is the parsed JSON.
      */
     async recordBuildResult(as: string, raw: unknown): Promise<Stored> {
@@ -600,7 +606,7 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       if (!parsed.ok) {
         throw new DomainError(
           "invalid_input",
-          `That isn't a build-result/v1: ${parsed.problems.join(" ")}`,
+          `That isn't a build-result/v1 or /v2: ${parsed.problems.join(" ")}`,
         );
       }
       const { result } = parsed;

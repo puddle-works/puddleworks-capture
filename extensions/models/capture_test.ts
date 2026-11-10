@@ -631,8 +631,20 @@ describe("@puddleworks/capture/requests", () => {
         result: JSON.stringify(releasingResult({ source })),
       });
       expect(swamp.data(`request-${id}`)).toMatchObject({
-        status: "released",
+        status: "building",
         version: 8,
+      });
+      // The outcome owner sends the phrase through puddlerouter on their desk.
+      await run("record_router_test", {
+        ...olive,
+        version: "2026.10.23.1",
+        results: JSON.stringify([
+          { phrase: "what should I order this week", outcome: "answered" },
+        ]),
+      });
+      expect(swamp.data(`request-${id}`)).toMatchObject({
+        status: "released",
+        version: 9,
       });
       // The same result again changes nothing, but still hands back the request.
       const again = await run("record_build_result", {
@@ -640,7 +652,7 @@ describe("@puddleworks/capture/requests", () => {
         result: JSON.stringify(releasingResult({ source })),
       });
       expect(again.dataHandles.map((h) => h.name)).toEqual([`request-${id}`]);
-      expect(swamp.data(`request-${id}`)).toMatchObject({ version: 8 });
+      expect(swamp.data(`request-${id}`)).toMatchObject({ version: 9 });
     } finally {
       await Deno.remove(dir, { recursive: true });
     }
@@ -863,7 +875,7 @@ describe("@puddleworks/capture/requests", () => {
       }),
     });
     expect(swamp.logs.at(-1)).toBe(
-      `Not released yet: The example "what should I order this week" wasn't reported.`,
+      `Not released yet: The example "what should I order this week" wasn't reported. The example "what should I order this week" hasn't been sent through puddlerouter with version 2026.10.23.1.`,
     );
   });
 

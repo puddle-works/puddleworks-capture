@@ -7,8 +7,9 @@
  * person may do: the outcome owner submits and agrees, builders join and
  * write the specification, observers read. Once it is agreed,
  * start_building marks it Building when work starts, and record_build_result
- * records what a build of it produced: Building, then Released once it is
- * published and every recipe example passed.
+ * records what a build of it produced. It is Released once the published
+ * recipe matches the agreed one and its outcome owner has sent every example
+ * through puddlerouter with record_router_test.
  *
  * Output:
  * - `request`: one request and everything on it (`request-<id>`), a new
@@ -35,6 +36,7 @@ import {
   REQUEST_STATUSES,
   REVIEW_VERDICTS,
   ROLES,
+  ROUTER_TEST_OUTCOMES,
   SpecificationContentSchema,
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
@@ -672,6 +674,34 @@ export const model = {
       withId,
       (s, who, a) => s.startBuilding(who, a.id),
     ),
+    record_router_test: change(
+      "Record sending the agreed example phrases through puddlerouter on your own desk, with the current build's published version installed. Only the outcome owner can. Each test replaces your last one for that version; the request is released once every phrase was answered and nothing else stops it.",
+      "Recorded a puddlerouter test of",
+      withId.extend({
+        version: z.string().trim().min(1).max(100).describe(
+          "The extension version installed when the phrases went through.",
+        ),
+        results: z.preprocess(
+          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+          z.array(z.object({
+            phrase: z.string().trim().min(1).max(500).describe(
+              "An agreed example phrase, as written.",
+            ),
+            outcome: z.enum(ROUTER_TEST_OUTCOMES).describe(
+              "answered; answered-after-yes for a write recipe that asked for a yes, then ran; or not-answered when it went to Claude or no recipe answered.",
+            ),
+            note: z.string().max(2_000).optional().describe(
+              "What happened, such as what came back instead.",
+            ),
+          })).min(1).max(50),
+        ).describe("One entry per phrase sent, as an array or JSON text."),
+      }),
+      (s, who, a) =>
+        s.recordRouterTest(who, a.id, {
+          version: a.version,
+          results: a.results,
+        }),
+    ),
     withdraw: change(
       "Withdraw a request. Only its outcome owner can.",
       "Withdrew",
@@ -910,7 +940,7 @@ export const model = {
 
     record_build_result: {
       description:
-        "Record a build-result/v1 against the request its source.url names. The first moves an agreed request to building, unless start_building already did; it is released once the latest build is published and every example in the agreed recipe passed. The same result twice changes nothing.",
+        "Record a build-result/v1 or /v2 against the request its source.url names. The first moves an agreed request to building, unless start_building already did. It is released once the latest build is a published v2 whose recipe has every agreed phrase as written and the agreed answer when there is nothing to show, every example passed, and the outcome owner has sent each phrase through puddlerouter with the published version (record_router_test). The same result twice changes nothing.",
       arguments: z.object({
         as,
         result: z.union([

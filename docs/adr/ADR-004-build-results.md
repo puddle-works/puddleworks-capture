@@ -13,6 +13,28 @@ same `recipeId` on every example and `router.version` equal to
 `published.version`. `router.source` is shown, not checked, so a recipe built
 for another request can answer this one (factory#55's reused recipe).
 
+Amended (2026-11-10, issue #27, factory#78): Mark decided the person who asked
+runs the router test, `whenEmpty` must match exactly, and the result moves to
+build-result/v2. This replaces the 2026-11-09 amendment:
+
+- **The outcome owner records the router test in Capture**, with
+  `record_router_test`: the version installed on their desk and, per agreed
+  phrase, `answered`, `answered-after-yes` or `not-answered`, with a note. A
+  builder can't record one. Each test replaces the last for that version.
+- **build-result/v2 carries the recipe as published**:
+  `recipe: { id, phrases,
+  empty }`, copied from the recipe tag. It has no
+  `router` or `recipeId`.
+- **Released needs** the builder's checks to pass as before, a published v2
+  whose `recipe.phrases` has every agreed phrase as written and whose
+  `recipe.empty` is the agreed `whenEmpty` (ends trimmed), a `whenEmpty` that
+  isn't blank, and the outcome owner's latest test of the published version
+  answering every agreed phrase. `record_router_test` can release a request too,
+  and a failing retest takes it back to Building.
+- **v1 is still read** and its builder-reported `router` evidence is shown as
+  such, but a v1 result can't release a request, as it carries no recipe.
+  Requests already Released stay as they are.
+
 Changes one line of [ADR-002](ADR-002-capture-standalone.md), which put build
 results out of Capture. Agreeing is still the hand-off; this adds what comes
 back.
@@ -58,10 +80,10 @@ Those are what decide whether a build is done.
   Released request back to Building. Revise works from Building or Released, as
   from Agreed, and the results recorded stay on the request. Building can be
   withdrawn; Released can't, as the app is already out.
-- **Capture reads the contract with its own copy.** `build_result_v1.ts` has the
-  Factory's field rules plus `examples`, and drops fields it doesn't know.
-  Capture still imports nothing from the Factory; a test reads the Factory's
-  example file, which CI checks out from the Factory's main.
+- **Capture reads the contract with its own copy.** `build_result.ts` has the
+  Factory's field rules for v1 and v2, and drops fields it doesn't know. Capture
+  still imports nothing from the Factory; a test reads the Factory's example
+  files, which CI checks out from the Factory's main.
 - **The page links out.** The latest build shows its repository, branch, pull
   request, published version and registry page,
   `https://swamp-club.com/extensions/<extension>`, with how each example came

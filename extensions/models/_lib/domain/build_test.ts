@@ -2,6 +2,7 @@ import { describe, expect, it } from "./test_bdd.ts";
 import {
   agree,
   allowedActions,
+  type BuildResult,
   currentBuild,
   editSpecification,
   exampleChecks,
@@ -9,6 +10,7 @@ import {
   propose,
   recordBuildResult,
   recordExport,
+  recordRouterTest,
   registryUrl,
   releaseProblems,
   type Request,
@@ -28,6 +30,7 @@ import {
   releasingResult,
   reviewer,
   routedExample,
+  routerTested,
   T2,
 } from "./test_fixtures.ts";
 
@@ -70,14 +73,35 @@ describe("reading a build result", () => {
 
   it("says in plain words what is wrong with one that isn't", () => {
     expect(
-      parseBuildResult({ ...buildResult(), apiVersion: "x", repository: "x" }),
+      parseBuildResult({ ...buildResult(), apiVersion: "x" }),
     ).toEqual({
       ok: false,
       problems: [
-        'apiVersion must be "puddleworks.dev/build-result/v1".',
-        "repository: Invalid URL",
+        'apiVersion must be "puddleworks.dev/build-result/v1" or "puddleworks.dev/build-result/v2".',
       ],
     });
+  });
+
+  it("reads a v1 with the builder's router evidence, and a v2 with the published recipe", () => {
+    const v1 = parseBuildResult(
+      buildResult({
+        examples: [routedExample("what should I order this week")],
+      }),
+    );
+    expect(v1.ok && v1.result.examples?.[0]).toMatchObject({
+      recipeId: "stock-counts",
+    });
+    const v2 = parseBuildResult({
+      ...releasingResult(),
+      examples: [routedExample("what should I order this week")],
+    });
+    expect(v2.ok && v2.result.examples?.[0]).toEqual({
+      phrase: "what should I order this week",
+      passed: true,
+    });
+    expect(v2.ok && "recipe" in v2.result && v2.result.recipe?.id).toBe(
+      "stock-counts",
+    );
   });
 
   it("takes only https links, since the page links to them", () => {
@@ -107,17 +131,32 @@ describe("recording a build result", () => {
     }]);
   });
 
-  it("goes agreed → building → released as the results come in", () => {
+  it("goes agreed → building → released as the results and the router test come in", () => {
     let r = recordBuildResult(agreedRequest(), builder, buildResult(), T3);
     r = recordBuildResult(r, builder, releasingResult(), T3);
+    expect(r.status).toBe("building");
+    r = routerTested(r);
     expect(r.status).toBe("released");
-    expect(r.transitions.map((t) => `${t.from}->${t.to}:${t.action}`).slice(-2))
-      .toEqual(["agreed->building:build", "building->released:release"]);
+    expect(
+      r.transitions.map((t) => `${t.from}->${t.to}:${t.action}:${t.by}`)
+        .slice(-2),
+    ).toEqual([
+      `agreed->building:build:${builder.userId}`,
+      `building->released:release:${owner.userId}`,
+    ]);
     expect(r.buildResults).toHaveLength(2);
   });
 
-  it("releases straight from agreed when the first result is a passing release", () => {
-    const r = recordBuildResult(agreedRequest(), owner, releasingResult(), T3);
+  it("releases a newer build of the same published version the owner already tested", () => {
+    let r = routerTested(
+      recordBuildResult(agreedRequest(), builder, releasingResult(), T3),
+    );
+    r = recordBuildResult(
+      r,
+      builder,
+      releasingResult({ builtAt: "2026-10-24T09:00:00.000Z" }),
+      T3,
+    );
     expect(r.status).toBe("released");
   });
 
@@ -138,7 +177,9 @@ describe("recording a build result", () => {
   });
 
   it("lets the latest result win, by when it was built", () => {
-    let r = recordBuildResult(agreedRequest(), builder, releasingResult(), T3);
+    let r = routerTested(
+      recordBuildResult(agreedRequest(), builder, releasingResult(), T3),
+    );
     // Written before the release, but recorded after it.
     r = recordBuildResult(r, builder, buildResult(), T3);
     expect(r.status).toBe("released");
@@ -298,11 +339,8 @@ describe("starting to build before any result", () => {
     expect(() => startBuilding(building, builder, T3)).toThrowError(
       expect.objectContaining({ code: "invalid_state" }),
     );
-    const released = recordBuildResult(
-      agreedRequest(),
-      builder,
-      releasingResult(),
-      T3,
+    const released = routerTested(
+      recordBuildResult(agreedRequest(), builder, releasingResult(), T3),
     );
     expect(() => startBuilding(released, builder, T3)).toThrowError(
       expect.objectContaining({ code: "invalid_state" }),
@@ -317,9 +355,9 @@ describe("starting to build before any result", () => {
     expect(r.transitions.filter((t) => t.action === "build")).toHaveLength(1);
   });
 
-  it("is released by a passing result, from building", () => {
+  it("is released by a passing result and router test, from building", () => {
     let r = startBuilding(agreedRequest(), builder, T3);
-    r = recordBuildResult(r, builder, releasingResult(), T3);
+    r = routerTested(recordBuildResult(r, builder, releasingResult(), T3));
     expect(r.status).toBe("released");
     expect(r.transitions.map((t) => `${t.from}->${t.to}:${t.action}`).slice(-2))
       .toEqual(["agreed->building:build", "building->released:release"]);
@@ -350,6 +388,7 @@ describe("released only when every example passes", () => {
         requested: false,
         outcome: "passed",
         detail: null,
+        routerTest: null,
         recipeId: null,
         router: null,
       },
@@ -358,6 +397,7 @@ describe("released only when every example passes", () => {
         requested: false,
         outcome: "missing",
         detail: null,
+        routerTest: null,
         recipeId: null,
         router: null,
       },
@@ -378,7 +418,7 @@ describe("released only when every example passes", () => {
       T3,
     );
     expect(r.status).toBe("building");
-    expect(releaseProblems(r, currentBuild(r)!)).toEqual([
+    expect(releaseProblems(routerTested(r), currentBuild(r)!)).toEqual([
       'The example "what should I order this week" failed: Answered for one week only.',
       'The example "what should I order next week" wasn\'t reported.',
     ]);
@@ -397,7 +437,7 @@ describe("released only when every example passes", () => {
       agreedWith(content, phrase),
       builder,
       releasingResult({
-        examples: [routedExample("what should I order next week")],
+        examples: [{ phrase: "what should I order next week", passed: true }],
       }),
       T3,
     );
@@ -407,7 +447,7 @@ describe("released only when every example passes", () => {
       requested: true,
       outcome: "missing",
     });
-    expect(releaseProblems(r, currentBuild(r)!)).toEqual([
+    expect(releaseProblems(routerTested(r), currentBuild(r)!)).toEqual([
       `The requested phrase "${phrase}" wasn't reported.`,
     ]);
   });
@@ -516,92 +556,190 @@ describe("after a build", () => {
   });
 });
 
-describe("released only once puddlerouter answered each example", () => {
+describe("released only once the recipe matches and the owner's router test answered", () => {
   const phrase = "what should I order this week";
-  const released = (examples: ReturnType<typeof routedExample>[]) => {
-    const r = recordBuildResult(
-      agreedRequest(),
-      builder,
-      releasingResult({ examples }),
+  const recorded = (
+    result: BuildResult = releasingResult(),
+    request = agreedRequest(),
+  ) => recordBuildResult(request, builder, result, T3);
+  const problems = (r: Request) => releaseProblems(r, currentBuild(r)!);
+
+  it("waits for the outcome owner to send each phrase through the published version", () => {
+    const r = recorded();
+    expect(r.status).toBe("building");
+    expect(problems(r)).toEqual([
+      `The example "${phrase}" hasn't been sent through puddlerouter with version 2026.10.23.1.`,
+    ]);
+    expect(routerTested(r, "answered-after-yes").status).toBe("released");
+  });
+
+  it("stays building when a phrase wasn't answered, saying what happened", () => {
+    const r = recordRouterTest(recorded(), owner, {
+      version: "2026.10.23.1",
+      results: [{ phrase, outcome: "not-answered", note: " Went to Claude. " }],
+    }, T3);
+    expect(r.status).toBe("building");
+    expect(problems(r)).toEqual([
+      `The example "${phrase}" wasn't answered through puddlerouter: Went to Claude.`,
+    ]);
+    expect(r.routerTests?.at(-1)?.results[0].note).toBe("Went to Claude.");
+  });
+
+  it("counts a phrase the test left out as not sent", () => {
+    const r = recordRouterTest(
+      recorded(releasingResult(), agreedWith()),
+      owner,
+      { version: "2026.10.23.1", results: [{ phrase, outcome: "answered" }] },
       T3,
     );
-    return { status: r.status, problems: releaseProblems(r, currentBuild(r)!) };
-  };
-  const router = routedExample(phrase).router;
-
-  it("releases a published build whose recipe for this request answered through the published version", () => {
-    expect(released([routedExample(phrase)])).toEqual({
-      status: "released",
-      problems: [],
-    });
-    expect(
-      released([routedExample(phrase, {
-        router: { ...router, outcome: "answered-after-yes" },
-      })]).status,
-    ).toBe("released");
-  });
-
-  it("keeps a self-reported pass without router evidence in Building", () => {
-    expect(released([{ phrase, passed: true } as never])).toEqual({
-      status: "building",
-      problems: [
-        `The example "${phrase}" doesn't name the recipe that answers it.`,
-        `The example "${phrase}" wasn't tested through puddlerouter.`,
-      ],
-    });
-  });
-
-  it("needs the version puddlerouter ran to be the one published", () => {
-    expect(
-      released([routedExample(phrase, {
-        router: { ...router, version: "2026.10.22.9" },
-      })]).problems,
-    ).toEqual([
-      `The example "${phrase}" went through puddlerouter with version 2026.10.22.9, not the published 2026.10.23.1.`,
+    expect(problems(r)).toEqual([
+      'The example "what should I order next week" wasn\'t reported.',
+      'The example "what should I order next week" hasn\'t been sent through puddlerouter with version 2026.10.23.1.',
     ]);
   });
 
-  it("releases with a recipe built for another request, or one that doesn't say", () => {
-    const { source: _, ...noSource } = router;
-    expect(released([routedExample(phrase, { router: noSource })]).status)
-      .toBe("released");
-    expect(
-      released([routedExample(phrase, {
-        router: {
-          ...router,
-          source: { url: "http://127.0.0.1:3002/requests/r-9", version: 4 },
-        },
-      })]).status,
-    ).toBe("released");
+  it("lets the latest test of a version count, so a failing retest takes it back to building", () => {
+    let r = routerTested(recorded());
+    expect(r.status).toBe("released");
+    r = routerTested(r, "not-answered");
+    expect(r.status).toBe("building");
+    expect(r.transitions.at(-1)).toMatchObject({
+      from: "released",
+      to: "building",
+      by: owner.userId,
+    });
+    expect(routerTested(r).status).toBe("released");
   });
 
-  it("needs one recipe to answer every example", () => {
-    const r = recordBuildResult(
-      agreedWith(),
+  it("needs a new test once a build publishes another version", () => {
+    let r = routerTested(recorded());
+    r = recordBuildResult(
+      r,
       builder,
       releasingResult({
-        examples: [
-          routedExample("what should I order this week"),
-          routedExample("what should I order next week", {
-            recipeId: "weekly-orders",
-          }),
-        ],
+        published: { version: "2026.10.24.1", visibility: "public" },
+        builtAt: "2026-10-24T09:00:00.000Z",
       }),
       T3,
     );
     expect(r.status).toBe("building");
-    expect(releaseProblems(r, currentBuild(r)!)).toEqual([
-      "The examples were answered by different recipes (stock-counts, weekly-orders); one recipe answers this request.",
+    expect(problems(r)).toEqual([
+      `The example "${phrase}" hasn't been sent through puddlerouter with version 2026.10.24.1.`,
     ]);
   });
 
-  it("reads an outcome only as answered or answered-after-yes", () => {
-    const result = releasingResult({
-      examples: [routedExample(phrase, {
-        router: { ...router, outcome: "sent-to-claude" as never },
-      })],
+  it("needs every agreed phrase in the published recipe exactly as written", () => {
+    const r = routerTested(recorded(releasingResult({
+      recipe: {
+        id: "stock-counts",
+        phrases: ["What should I order this week"],
+        empty: "Nothing needs ordering.",
+      },
+    })));
+    expect(r.status).toBe("building");
+    expect(problems(r)).toEqual([
+      `The published recipe doesn't have the example "${phrase}" as written.`,
+    ]);
+  });
+
+  it("needs the recipe's answer when there is nothing to show to be the agreed one exactly", () => {
+    const r = routerTested(recorded(releasingResult({
+      recipe: {
+        id: "stock-counts",
+        phrases: [phrase],
+        empty: "Nothing needs ordering",
+      },
+    })));
+    expect(problems(r)).toEqual([
+      'The published recipe answers "Nothing needs ordering" when there is nothing to show, not the agreed "Nothing needs ordering.".',
+    ]);
+  });
+
+  it("can't release a spec that doesn't say what to answer when there is nothing to show", () => {
+    const blank = {
+      ...goodSpec,
+      recipe: { ...goodSpec.recipe!, whenEmpty: "  " },
+    };
+    let r = editSpecification(discussingRequest(), builder, blank, [], T2);
+    r = propose(r, builder, T2);
+    r = agree(r, owner, { version: 1, specHash: "hash-v1" }, T2);
+    r = routerTested(recorded(releasingResult(), r));
+    expect(r.status).toBe("building");
+    expect(problems(r)).toEqual([
+      "Say what the answer is when there is nothing to show. Revise the spec to add it.",
+    ]);
+  });
+
+  it("can't release a v1 result, which carries no recipe, whatever its router evidence", () => {
+    const v1 = buildResult({
+      published: { version: "2026.10.23.1", visibility: "public" },
+      examples: [routedExample(phrase)],
     });
-    expect(parseBuildResult(result).ok).toBe(false);
-    expect(parseBuildResult(releasingResult()).ok).toBe(true);
+    const r = routerTested(recorded(v1));
+    expect(r.status).toBe("building");
+    expect(problems(r)).toEqual([
+      "It is a build-result/v1, which doesn't carry the published recipe. Record a build-result/v2.",
+    ]);
+    // The builder's report is still there to show.
+    expect(exampleChecks(r, v1)[0]).toMatchObject({
+      recipeId: "stock-counts",
+      router: { version: "2026.10.23.1" },
+      routerTest: { outcome: "answered" },
+    });
+  });
+
+  it("lets only the outcome owner record a router test", () => {
+    const r = recorded();
+    const test = {
+      version: "2026.10.23.1",
+      results: [{ phrase, outcome: "answered" as const }],
+    };
+    expect(() => recordRouterTest(r, builder, test, T3)).toThrowError(
+      expect.objectContaining({
+        code: "not_allowed",
+        message: "As a builder you can't record a puddlerouter test.",
+      }),
+    );
+    expect(() => recordRouterTest(r, reviewer, test, T3)).toThrowError(
+      expect.objectContaining({ code: "not_allowed" }),
+    );
+  });
+
+  it("refuses a test of another version, of a phrase not agreed, or of one twice", () => {
+    const r = recorded();
+    const refuse = (test: Parameters<typeof recordRouterTest>[2]) =>
+      expect(() => recordRouterTest(r, owner, test, T3)).toThrowError(
+        expect.objectContaining({ code: "invalid_input" }),
+      );
+    refuse({
+      version: "2026.10.22.9",
+      results: [{ phrase, outcome: "answered" }],
+    });
+    refuse({
+      version: "2026.10.23.1",
+      results: [{ phrase: "something else", outcome: "answered" }],
+    });
+    refuse({
+      version: "2026.10.23.1",
+      results: [
+        { phrase, outcome: "answered" },
+        { phrase, outcome: "not-answered" },
+      ],
+    });
+  });
+
+  it("refuses a test before anything is published", () => {
+    const r = recordBuildResult(agreedRequest(), builder, buildResult(), T3);
+    expect(() =>
+      recordRouterTest(r, owner, {
+        version: "2026.10.23.1",
+        results: [{ phrase, outcome: "answered" }],
+      }, T3)
+    ).toThrowError(expect.objectContaining({ code: "invalid_state" }));
+  });
+
+  it("reads a request saved before router tests as having none", () => {
+    const { routerTests: _, ...old } = recorded();
+    expect(problems(old as Request)).toHaveLength(1);
   });
 });

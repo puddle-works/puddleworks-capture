@@ -8,6 +8,7 @@ import {
   goodSpec,
   owner,
   releasingResult,
+  routerTested,
   T2,
 } from "../../domain/test_fixtures.ts";
 import {
@@ -166,8 +167,9 @@ describe("history of a build", () => {
       request,
       builder,
       releasingResult(),
-      "2026-10-23T14:00:00.000Z",
+      "2026-10-23T13:30:00.000Z",
     );
+    request = routerTested(request, "answered", "2026-10-23T14:00:00.000Z");
     const view = toWebRequest({
       request,
       version: 6,
@@ -185,7 +187,7 @@ describe("history of a build", () => {
       },
       {
         label: "Released @example/stock-counts 2026.10.23.1",
-        by: "Bea Builder",
+        by: "Olive Owner",
         at: "2026-10-23T14:00:00.000Z",
         note: null,
       },

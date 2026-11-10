@@ -15,7 +15,8 @@ export type Permission =
   | "export"
   | "revise"
   | "startBuilding"
-  | "recordBuildResult";
+  | "recordBuildResult"
+  | "recordRouterTest";
 
 const GRANTS: Record<Role, readonly Permission[]> = {
   outcome_owner: [
@@ -32,6 +33,8 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "revise",
     "startBuilding",
     "recordBuildResult",
+    // The person who asked tries it on their own desk; a builder can't say so for them.
+    "recordRouterTest",
   ],
   // A builder may invite builders and reviewers only; inviteParticipant checks that.
   builder: [
@@ -97,6 +100,7 @@ const PERMISSION_WORDS: Record<Permission, string> = {
   revise: "revise the specification",
   startBuilding: "start building",
   recordBuildResult: "record a build result",
+  recordRouterTest: "record a puddlerouter test",
 };
 
 const ROLE_WORDS: Record<Role, string> = {

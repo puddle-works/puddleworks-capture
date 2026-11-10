@@ -1,3 +1,4 @@
+import { currentBuild } from "./build.ts";
 import { openQuestions } from "./discussion.ts";
 import { DomainError } from "./errors.ts";
 import {
@@ -17,6 +18,7 @@ export type AllowedAction =
   | "editSpecification"
   | "startBuilding"
   | "recordBuildResult"
+  | "recordRouterTest"
   | "export"
   | "message"
   | "invite"
@@ -67,6 +69,13 @@ export function allowedActions(
   const built = BUILT_FROM_AGREED.includes(request.status);
   if (can(role, "recordBuildResult") && built) {
     allowed.push("recordBuildResult");
+  }
+  if (
+    can(role, "recordRouterTest") &&
+    (request.status === "building" || request.status === "released") &&
+    currentBuild(request)?.result.published
+  ) {
+    allowed.push("recordRouterTest");
   }
   // Exporting leaves the status as it is, so it isn't a transition.
   if (can(role, "export") && built) allowed.push("export");
