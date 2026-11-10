@@ -338,15 +338,21 @@ export function recordRouterTest(
     }
     seen.add(phrase);
   }
+  const results = test.results.map(({ phrase, outcome, note }) => ({
+    phrase,
+    outcome,
+    note: note?.trim() || null,
+  }));
+  // A retry of the same test changes nothing, as with build results.
+  const last = routerTestFor(request, test.version);
+  if (last && canonicalJson(last.results) === canonicalJson(results)) {
+    return request;
+  }
   const recorded: Request = {
     ...request,
     routerTests: [...(request.routerTests ?? []), {
       version: test.version,
-      results: test.results.map(({ phrase, outcome, note }) => ({
-        phrase,
-        outcome,
-        note: note?.trim() || null,
-      })),
+      results,
       recordedBy: actor.userId,
       recordedAt: at,
     }],

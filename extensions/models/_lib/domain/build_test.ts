@@ -688,6 +688,11 @@ describe("released only once the recipe matches and the owner's router test answ
     });
   });
 
+  it("changes nothing when the same test is recorded again", () => {
+    const r = routerTested(recorded());
+    expect(routerTested(r, "answered", "2026-10-24T09:00:00.000Z")).toBe(r);
+  });
+
   it("lets only the outcome owner record a router test", () => {
     const r = recorded();
     const test = {

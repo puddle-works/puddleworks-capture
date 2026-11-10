@@ -646,13 +646,46 @@ describe("@puddleworks/capture/requests", () => {
         status: "released",
         version: 9,
       });
+      // The same test again changes nothing, but still hands back the request.
+      const retest = await run("record_router_test", {
+        ...olive,
+        version: "2026.10.23.1",
+        results: JSON.stringify([
+          { phrase: "what should I order this week", outcome: "answered" },
+        ]),
+      });
+      expect(retest.dataHandles.map((h) => h.name)).toEqual([`request-${id}`]);
+      // A failing retest says why it isn't released, and bad JSON is refused.
+      await run("record_router_test", {
+        ...olive,
+        version: "2026.10.23.1",
+        results: [{
+          phrase: "what should I order this week",
+          outcome: "not-answered",
+          note: "It went to Claude.",
+        }],
+      });
+      expect(swamp.logs.at(-2)).toBe(
+        'Not released yet: The example "what should I order this week" wasn\'t answered through puddlerouter: It went to Claude.',
+      );
+      expect(
+        model.methods.record_router_test.arguments.safeParse({
+          ...olive,
+          version: "2026.10.23.1",
+          results: "[{not json",
+        }).success,
+      ).toBe(false);
+      expect(swamp.data(`request-${id}`)).toMatchObject({
+        status: "building",
+        version: 10,
+      });
       // The same result again changes nothing, but still hands back the request.
       const again = await run("record_build_result", {
         as: "bea@example.com",
         result: JSON.stringify(releasingResult({ source })),
       });
       expect(again.dataHandles.map((h) => h.name)).toEqual([`request-${id}`]);
-      expect(swamp.data(`request-${id}`)).toMatchObject({ version: 9 });
+      expect(swamp.data(`request-${id}`)).toMatchObject({ version: 10 });
     } finally {
       await Deno.remove(dir, { recursive: true });
     }

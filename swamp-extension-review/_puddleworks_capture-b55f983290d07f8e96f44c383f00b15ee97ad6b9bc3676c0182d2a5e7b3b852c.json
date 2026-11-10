@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.10.1",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-10T13:10:00Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "The extension holds no credentials and reads no vault. record_router_test stores the tester's userId, a version, phrases and notes; nothing secret. record_build_result still fetches https only."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "record_router_test logs the change line every method logs and, like record_build_result, what stops the release when the request isn't released. Logs carry ids, numbers, statuses and the plain-word problems, not emails."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "Refusals are DomainErrors in plain words: not the outcome owner (not_allowed), no published build, another version, a phrase not agreed, or one twice (invalid_input/invalid_state). parseBuildResult names v1 and v2 when apiVersion is wrong. results that aren't JSON now fail validation instead of throwing a raw SyntaxError. candidateExtensions, specification and review still JSON.parse text without a catch; that is unchanged from 2026.11.09.2 and outside this release."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "Domain tests cover each Released condition both ways: missing router test, not-answered with note, a phrase left out, latest test wins and a failing retest goes back to Building, a newly published version needs a new test, phrases as written, empty matching exactly, blank whenEmpty, v1 can't release but its evidence is shown, owner-only, wrong version, unknown or duplicate phrase, before publishing, and a request saved before router tests. Services and behavior tests run the whole path including a retry and bad JSON. The contract test reads Factory main's v1 and v2 examples (0a0236e). 67 tests pass."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "The same build result twice and now the same router test twice change nothing and still write the request to the method output. A new test for a version replaces the last; history keeps every test."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "build-result/v2 is read as Factory's contract (factory#139): recipe {id 1–200, phrases 1–50 trimmed, empty trimmed non-blank}. v1 still parses, but under Mark's decision on factory#78 a v1 result can no longer release a request; Factory's -result writes v1 until this version is published and then switches to v2. Requests already Released keep their status; the rule is applied when something new is recorded."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "No new files, sockets or timers. record_router_test reads and writes one request through the existing store."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "The manifest description, README and ADR-004 name record_router_test and the new Released rule. The archive holds the same files as 2026.11.09.2 with build_result_v1.ts renamed build_result.ts."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "record_router_test arguments: version trimmed 1–100, results 1–50 of {phrase trimmed 1–500, outcome enum, note ≤2000}. The v2 reader mirrors Factory's limits and drops unknown fields, as the contract allows."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "routerTests grows by one entry per changed test on a request, bounded by how often the owner retests; identical retries add nothing. No data is written outside the request."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "pass",
+      "note": "Router tests are recorded and read on the request and page; they're never edited in place, a new test replaces the last for its version, as build results work."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "recordRouterTest checks permission, then a published current build, then the version, then each phrase, before changing anything."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "No new data names: record_router_test writes request-<id> as other methods do."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "Only the request's outcome owner can record a router test; builders, reviewers and observers get not_allowed, and someone who can't see the request gets not_found from the existing load. An outcome owner who is a builder may now start building (#45); the role check is still per request."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "Both behaviors move to 2026.11.10.1 with no-op upgrade entries; the settings are unchanged. routerTests is optional on stored requests and read as none when absent, so existing data needs no migration."
+    }
+  ]
+}

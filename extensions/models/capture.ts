@@ -184,7 +184,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.09.2",
+  version: "2026.11.10.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -264,6 +264,12 @@ export const model = {
       toVersion: "2026.11.09.2",
       description:
         "revise_specification, transfer_ownership, effects on the spec, a requester on logged requests, and Released needs puddlerouter evidence; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.10.1",
+      description:
+        "build-result/v2 with the published recipe, record_router_test for the outcome owner, and Released needs both; an outcome owner who is a builder can start building; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
@@ -682,7 +688,15 @@ export const model = {
           "The extension version installed when the phrases went through.",
         ),
         results: z.preprocess(
-          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+          // Text that isn't JSON is left as text, so it fails as not a list.
+          (v) => {
+            if (typeof v !== "string") return v;
+            try {
+              return JSON.parse(v);
+            } catch {
+              return v;
+            }
+          },
           z.array(z.object({
             phrase: z.string().trim().min(1).max(500).describe(
               "An agreed example phrase, as written.",
@@ -696,11 +710,22 @@ export const model = {
           })).min(1).max(50),
         ).describe("One entry per phrase sent, as an array or JSON text."),
       }),
-      (s, who, a) =>
-        s.recordRouterTest(who, a.id, {
+      async (s, who, a, context, store) => {
+        const stored = await s.recordRouterTest(who, a.id, {
           version: a.version,
           results: a.results,
-        }),
+        });
+        // The same test again saves nothing; write it so a step reading the
+        // output still gets the request, as record_build_result does.
+        if (!store.wrote(stored.request.id)) await store.saveRequest(stored);
+        const current = currentBuild(stored.request);
+        if (stored.request.status !== "released" && current) {
+          context.logger.info("Not released yet: {problems}", {
+            problems: releaseProblems(stored.request, current).join(" "),
+          });
+        }
+        return stored;
+      },
     ),
     withdraw: change(
       "Withdraw a request. Only its outcome owner can.",
