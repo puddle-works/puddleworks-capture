@@ -667,7 +667,7 @@ export const model = {
       (s, who, a) => s.revise(who, a.id),
     ),
     start_building: change(
-      "Mark an agreed request as Building, when work on it starts and before any build result. Only a builder can. Build results recorded after that keep it Building until one is released.",
+      "Mark an agreed request as Building, when work on it starts and before any build result. Only a builder can: one on the request, or its outcome owner when the people list marks them a builder. Build results recorded after that keep it Building until one is released.",
       "Started building",
       withId,
       (s, who, a) => s.startBuilding(who, a.id),

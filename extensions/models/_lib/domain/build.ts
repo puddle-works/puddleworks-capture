@@ -8,7 +8,7 @@ import type {
   Person,
   Request,
 } from "./model.ts";
-import { requirePermission } from "./permissions.ts";
+import { canStartBuilding, requirePermission } from "./permissions.ts";
 import { BUILT_FROM_AGREED, latestAgreed } from "./specification.ts";
 
 /** The extension's page on the swamp registry. */
@@ -140,7 +140,13 @@ export function startBuilding(
   actor: Person,
   at: string,
 ): Request {
-  requirePermission(request, actor, "startBuilding");
+  const role = requirePermission(request, actor, "startBuilding");
+  if (!canStartBuilding(role, actor)) {
+    throw new DomainError(
+      "not_allowed",
+      "As the outcome owner you can't start building unless you are a builder in the people list.",
+    );
+  }
   if (request.status !== "agreed") {
     throw new DomainError(
       "invalid_state",

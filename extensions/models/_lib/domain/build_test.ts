@@ -246,12 +246,23 @@ describe("starting to build before any result", () => {
     });
   });
 
-  it("lets only a builder start, not the outcome owner, a reviewer or an outsider", () => {
+  it("lets the outcome owner start when they are a builder in the people list, and records them", () => {
+    const ownerBuilder = { ...owner, isBuilder: true };
+    const r = startBuilding(agreedRequest(), ownerBuilder, T3);
+    expect(r.status).toBe("building");
+    expect(r.transitions.at(-1)).toMatchObject({
+      action: "build",
+      by: owner.userId,
+    });
+  });
+
+  it("lets only a builder start: not an outcome owner who isn't one, a reviewer or an outsider", () => {
     const r = agreedRequest();
     expect(() => startBuilding(r, owner, T3)).toThrowError(
       expect.objectContaining({
         code: "not_allowed",
-        message: "As the outcome owner you can't start building.",
+        message:
+          "As the outcome owner you can't start building unless you are a builder in the people list.",
       }),
     );
     const withReviewer = {
@@ -489,6 +500,9 @@ describe("after a build", () => {
     const agreed = agreedRequest();
     expect(allowedActions(agreed, builder)).toContain("startBuilding");
     expect(allowedActions(agreed, owner)).not.toContain("startBuilding");
+    expect(allowedActions(agreed, { ...owner, isBuilder: true })).toContain(
+      "startBuilding",
+    );
     const building = startBuilding(agreed, builder, T3);
     expect(allowedActions(building, builder)).not.toContain("startBuilding");
     expect(allowedActions(discussingRequest(), builder)).not.toContain(
