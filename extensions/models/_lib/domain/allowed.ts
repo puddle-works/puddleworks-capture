@@ -8,7 +8,7 @@ import {
   isClosed,
 } from "./lifecycle.ts";
 import type { Person, Request } from "./model.ts";
-import { can, canRead, roleOf } from "./permissions.ts";
+import { can, canRead, canStartBuilding, roleOf } from "./permissions.ts";
 import { canEditDetails } from "./request.ts";
 import { BUILT_FROM_AGREED } from "./specification.ts";
 
@@ -63,7 +63,7 @@ export function allowedActions(
   ) {
     allowed.push("editSpecification");
   }
-  if (can(role, "startBuilding") && request.status === "agreed") {
+  if (canStartBuilding(role, person) && request.status === "agreed") {
     allowed.push("startBuilding");
   }
   const built = BUILT_FROM_AGREED.includes(request.status);

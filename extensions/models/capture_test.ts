@@ -819,7 +819,7 @@ describe("@puddleworks/capture/requests", () => {
       run("start_building", { id }),
       expect.objectContaining({
         message: expect.stringContaining(
-          "As the outcome owner you can't start building.",
+          "As the outcome owner you can't start building unless you are a builder in the people list.",
         ),
       }),
     );

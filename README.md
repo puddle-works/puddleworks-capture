@@ -206,17 +206,17 @@ replaces the last for that version.
 | Building | Work is started, the first result is recorded, or the latest isn't released                                                                 |
 | Released | The latest build is published, its recipe matches the agreed one, and the outcome owner's router test of that version answered every phrase |
 
-When work starts, before there is any result, a builder on the request can mark
-it Building:
+When work starts, before there is any result, a builder on the request, or its
+outcome owner when the people list marks them a builder, can mark it Building:
 
 ```bash
 swamp behavior run capture start_building --input as=bea@example.com --input id=1
 ```
 
-It works only while the request is Agreed, and the outcome owner can't do it.
-Results recorded after that keep it Building until one is released. A factory
-that never calls it is unaffected: its first result moves the request to
-Building.
+It works only while the request is Agreed. An outcome owner who isn't a builder
+can't do it. Results recorded after that keep it Building until one is released.
+A factory that never calls it is unaffected: its first result moves the request
+to Building.
 
 The latest build is the one built last (`builtAt`), whatever order the results
 come in. It is released when:
