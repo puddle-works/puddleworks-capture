@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.11.09.2"
+version: "2026.11.10.1"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
@@ -11,7 +11,8 @@ description: |
   changes things. A build-result/v1 from the factory moves the request to
   Building, and to Released once it is published and one recipe answered
   every example through puddlerouter with that version; a builder can mark
-  it Building earlier, when work starts. An agreed spec can be revised and
+  it Building earlier, when work starts (an outcome owner who is a
+  builder can too). An agreed spec can be revised and
   proposed again in one step, with a reason. Everything is kept in swamp
   data.
 

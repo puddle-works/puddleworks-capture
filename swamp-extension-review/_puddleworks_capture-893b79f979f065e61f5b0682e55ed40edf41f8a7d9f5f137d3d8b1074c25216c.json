@@ -1,0 +1,82 @@
+{
+  "extension": "@puddleworks/capture",
+  "version": "2026.11.10.1",
+  "reviewedAt": "2026-11-10T12:45:00Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "No credentials, vault or network access added. The change only widens who may call start_building, from builders on a request to also its outcome owner when the people list marks them a builder (isBuilder). That flag is read from the people list at the moment of the call, not from the owner's participant record. It grants nothing beyond moving Agreed to Building, which the owner could already do by recording a first build result."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "start_building logs through change() as before (request number, id, status, version). The new refusal is a DomainError with its own plain message and logs nothing extra."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "A new refusal: an outcome owner who is not a builder gets not_allowed with 'As the outcome owner you can't start building unless you are a builder in the people list.' Reviewers, observers and outsiders keep the existing requirePermission messages. Status errors are unchanged and checked after permission, so a refused person learns nothing about the status. Tested in build_test and capture_test."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "Written test-first: the test that forbade the owner was changed, and added a case for an owner who is a builder (status, history entry and actor) and one who is not (message), plus allowedActions for both. capture_test checks the method refusing an owner who is not a builder. 65 tests pass with fmt, check and lint clean. The real swamp CLI was not run for this method; tests use FakeSwamp."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "start_building is not idempotent by design: a second call is refused because the request is no longer Agreed, so the history shows who started. Unchanged; recording the same build result twice still changes nothing."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "No contract change. outcome-spec/v1 and build-result/v1 are untouched, the method keeps the same arguments (as, id), and only a previously refused call can now succeed."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "No new handles, timers or subprocesses. Unchanged since 2026.11.09.2, whose review of this dimension stands: the only shipped code change is the start_building permission rule (canStartBuilding in permissions.ts, used by startBuilding and allowedActions)."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Shipped files are unchanged apart from the README, which now says an outcome owner who is a builder can start building; examples still use example.com addresses. ADR files are not shipped. The manifest description gains one parenthesis."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "No schema changes. Permissions are a typed table plus a pure function over Role and Person."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "No new resource specs. Unchanged since 2026.11.09.2, whose review of this dimension stands: the only shipped code change is the start_building permission rule (canStartBuilding in permissions.ts, used by startBuilding and allowedActions)."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "pass",
+      "note": "Nothing is added or removed. The one gap this closes is that an owner who builds their own request had no way to mark it Building before a result."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "startBuilding checks the participant's role (requirePermission), then the owner-must-be-builder rule, then that the request is Agreed, all before applyTransition. allowedActions applies the same canStartBuilding rule, so a client only offers the button when the call would be accepted."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "No new instance names; start_building writes only request-<id>."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "No new data reads. The rule uses the Person already loaded from the people list for the call. Capture still imports nothing from the Factory (independence_test passes)."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "Both behaviors go from 2026.11.09.2 to 2026.11.10.1 with no-op upgrade entries that keep global arguments; capture_test checks the last entry matches the model version and the manifest. Stored requests need no migration."
+    }
+  ]
+}
