@@ -19,11 +19,13 @@ couldn't tell that anyone had started, and the builder had no way to say so.
   reporting a build are different acts. The `build` transition and its history
   entry are the ones a result already used.
 - **Only a builder may start.** Starting says the work is under way, which is
-  the builder's to say, so the outcome owner, observers and reviewers can't. The
-  outcome owner and a builder may still record a build result, as before, which
-  also moves an Agreed request to Building. Someone who asked for the app and
-  builds it alone has no builder role on it, so their first result is what moves
-  it.
+  the builder's to say. That is a builder on the request, or its outcome owner
+  when the people list marks them a builder (`isBuilder`), so someone who asked
+  for the app and builds it themselves can start. An outcome owner who isn't a
+  builder, observers and reviewers can't. The outcome owner and a builder may
+  still record a build result, as before, which also moves an Agreed request to
+  Building. (First decided as builders on the request only, which left an owner
+  who builds without a way to start; this amends that.)
 - **Only from Agreed.** A Building request has started already, and a Released
   one is taken back to Building by a newer build that isn't released, as before.
   Asking again is refused, not ignored, so the history shows who started.

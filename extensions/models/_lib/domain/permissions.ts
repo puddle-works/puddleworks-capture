@@ -30,6 +30,7 @@ const GRANTS: Record<Role, readonly Permission[]> = {
     "withdraw",
     "export",
     "revise",
+    "startBuilding",
     "recordBuildResult",
   ],
   // A builder may invite builders and reviewers only; inviteParticipant checks that.
@@ -53,6 +54,15 @@ const GRANTS: Record<Role, readonly Permission[]> = {
 
 export function can(role: Role, permission: Permission): boolean {
   return GRANTS[role].includes(permission);
+}
+
+/**
+ * Starting says work is under way, so it is a builder's to say: a builder on
+ * the request, or its outcome owner when the people list marks them a builder.
+ */
+export function canStartBuilding(role: Role, person: Person): boolean {
+  return can(role, "startBuilding") &&
+    (role !== "outcome_owner" || person.isBuilder);
 }
 
 export function participantOf(
