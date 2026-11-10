@@ -575,12 +575,26 @@ describe("build results", () => {
     return { store, services, id, result };
   }
 
-  it("records a result against the request its source names, and releases it", async () => {
+  const test = {
+    version: "2026.10.23.1",
+    results: [{
+      phrase: "what should I order this week",
+      outcome: "answered" as const,
+    }],
+  };
+
+  it("records a result against the request its source names, then the owner's router test releases it", async () => {
     const { services, id, result } = await agreed();
     const stored = await services.recordBuildResult(BEA, result);
     expect(stored.request.id).toBe(id);
-    expect(stored.request.status).toBe("released");
+    expect(stored.request.status).toBe("building");
     expect(stored.request.buildResults[0].result).toEqual(result);
+    await expect.rejects(
+      services.recordRouterTest(BEA, id, test),
+      expect.objectContaining({ code: "not_allowed" }),
+    );
+    const tested = await services.recordRouterTest(OLIVE, id, test);
+    expect(tested.request.status).toBe("released");
   });
 
   it("saves nothing when the same result is recorded again", async () => {
@@ -592,14 +606,14 @@ describe("build results", () => {
     expect(again.request.buildResults).toHaveLength(1);
   });
 
-  it("refuses a result that isn't a build-result/v1, saying what is wrong", async () => {
+  it("refuses a result that isn't a build-result/v1 or /v2, saying what is wrong", async () => {
     const { services } = await agreed();
     await expect.rejects(
       services.recordBuildResult(BEA, { apiVersion: "x" }),
       expect.objectContaining({
         code: "invalid_input",
         message: expect.stringContaining(
-          'That isn\'t a build-result/v1: apiVersion must be "puddleworks.dev/build-result/v1".',
+          'That isn\'t a build-result/v1 or /v2: apiVersion must be "puddleworks.dev/build-result/v1" or "puddleworks.dev/build-result/v2".',
         ),
       }),
     );
@@ -640,6 +654,7 @@ describe("build results", () => {
   it("keeps the build results through a snapshot", async () => {
     const { services, id, result } = await agreed();
     await services.recordBuildResult(BEA, result);
+    await services.recordRouterTest(OLIVE, id, test);
     const file = JSON.parse(
       JSON.stringify(await services.exportSnapshot()),
     ) as Snapshot;
@@ -654,6 +669,7 @@ describe("build results", () => {
     expect(store.requests.get(id)?.request).toMatchObject({
       status: "released",
       buildResults: [{ result }],
+      routerTests: [{ version: "2026.10.23.1" }],
     });
   });
 });

@@ -285,8 +285,11 @@ export function historyEntries(request: WebRequest): HistoryEntry[] {
         : "Agreed";
     }
     if (t.action === "build" || t.action === "release") {
-      // Recording the build result made the change, at the same moment.
-      const b = request.buildResults.findLast((b) => b.recordedAt === t.at);
+      // Recording the build result made the change, at the same moment; a
+      // router test releases the build recorded before it.
+      const b = request.buildResults.findLast((b) =>
+        t.action === "release" ? b.recordedAt <= t.at : b.recordedAt === t.at
+      );
       if (b && t.action === "build") {
         label = `Building from ${b.result.buildRef}`;
       }

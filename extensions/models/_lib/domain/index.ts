@@ -2,7 +2,7 @@
 // and agreement. Pure TypeScript with no I/O.
 export * from "./allowed.ts";
 export * from "./build.ts";
-export * from "./build_result_v1.ts";
+export * from "./build_result.ts";
 export * from "./canonical.ts";
 export * from "./discussion.ts";
 export * from "./errors.ts";
