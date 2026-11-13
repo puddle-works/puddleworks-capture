@@ -983,3 +983,89 @@ describe("@puddleworks/capture/requests", () => {
     }
   });
 });
+
+describe("arguments given as JSON text", () => {
+  const review = {
+    verdict: "ready",
+    findings: [{ id: "F1", text: "Fine." }],
+  };
+  // Each argument a method takes as itself or as JSON text, with a valid value.
+  const cases: [MethodName, string, unknown, Record<string, unknown>][] = [
+    ["create_request", "candidateExtensions", ["@swamp/git"], {
+      title: "t",
+      description: "",
+    }],
+    ["edit_specification", "specification", goodSpec, { id: "1" }],
+    ["revise_specification", "specification", goodSpec, {
+      id: "1",
+      reason: "r",
+    }],
+    ["record_review", "review", review, { id: "1" }],
+  ];
+  const parse = (m: MethodName, input: Record<string, unknown>) =>
+    model.methods[m].arguments.safeParse(input);
+
+  it("takes the value itself or as JSON text, and the two read the same", () => {
+    for (const [m, key, value, rest] of cases) {
+      const native = parse(m, { ...rest, [key]: value });
+      const text = parse(m, { ...rest, [key]: JSON.stringify(value) });
+      expect(native.success).toBe(true);
+      expect(text.success).toBe(true);
+      // deno-lint-ignore no-explicit-any
+      expect((text as any).data[key]).toEqual((native as any).data[key]);
+    }
+  });
+
+  it("refuses text that isn't JSON as a validation failure, not a crash", () => {
+    for (const [m, key, , rest] of cases) {
+      const r = parse(m, { ...rest, [key]: "[{not json" });
+      expect(r.success).toBe(false);
+      expect(r.error!.issues.map((i) => i.path.join("."))).toEqual([key]);
+      expect(r.error!.issues[0].message).toMatch(/^isn't valid JSON: /);
+    }
+  });
+
+  it("refuses JSON of the wrong shape", () => {
+    for (const [m, key, , rest] of cases) {
+      for (const wrong of ['"just text"', "42", '{"x":1}', "[1,2]"]) {
+        expect(parse(m, { ...rest, [key]: wrong }).success).toBe(false);
+      }
+    }
+  });
+
+  it("writes nothing when an argument is refused", async () => {
+    const { swamp, run } = setup();
+    await people(run);
+    await expect.rejects(
+      run("create_request", {
+        as: "olive@example.com",
+        title: "Stock counts",
+        description: "",
+        candidateExtensions: "[{not json",
+      }),
+      expect.objectContaining({
+        message: expect.stringContaining("isn't valid JSON"),
+      }),
+    );
+    expect(swamp.written.filter((r) => r.specName === "request")).toEqual([]);
+    const created = await run("create_request", {
+      as: "olive@example.com",
+      title: "Stock counts",
+      description: "",
+      candidateExtensions: '["@swamp/git"]',
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    const before = swamp.written.length;
+    await expect.rejects(
+      run("edit_specification", {
+        as: "olive@example.com",
+        id,
+        specification: "{not json",
+      }),
+      expect.objectContaining({
+        message: expect.stringContaining("isn't valid JSON"),
+      }),
+    );
+    expect(swamp.written.length).toBe(before);
+  });
+});
