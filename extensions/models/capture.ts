@@ -1084,9 +1084,17 @@ export const model = {
           const file = args.path.startsWith("/")
             ? args.path
             : `${context.repoDir}/${args.path}`;
-          const snapshot = JSON.parse(
-            await Deno.readTextFile(file),
-          ) as Snapshot;
+          const text = await Deno.readTextFile(file);
+          let snapshot: Snapshot;
+          try {
+            snapshot = JSON.parse(text);
+          } catch {
+            // The parser's own message can quote the file, so it isn't passed on.
+            throw new DomainError(
+              "invalid_input",
+              `${args.path} isn't valid JSON, so nothing was imported.`,
+            );
+          }
           const counts = await services.importSnapshot(snapshot);
           store.add(
             await context.writeResource("importResult", "import-latest", {

@@ -984,6 +984,79 @@ describe("@puddleworks/capture/requests", () => {
   });
 });
 
+describe("importing a snapshot file that isn't one", () => {
+  // A short synthetic secret: V8's JSON errors quote about ten characters.
+  const MARKER = "SK_9f4c2e";
+  const good = {
+    format: "capture-snapshot/v1",
+    exportedAt: "2026-10-27T09:00:00.000Z",
+    people: [{
+      userId: "u-1",
+      name: "Olive",
+      email: "olive@example.com",
+      isBuilder: false,
+    }],
+    requests: [],
+  };
+
+  async function importing(text: string) {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(`${dir}/snapshot.json`, text);
+      const swamp = new FakeSwamp();
+      const context = swamp.context(model.globalArguments.parse({}), dir);
+      const m = model.methods.import;
+      let error: Error | undefined;
+      try {
+        await m.execute(m.arguments.parse({ path: "snapshot.json" }), context);
+      } catch (e) {
+        error = e as Error;
+      }
+      return { swamp, error };
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  }
+
+  it("refuses text that isn't JSON, without quoting it, and writes nothing", async () => {
+    for (
+      const text of [
+        `{"format": ${MARKER}}`,
+        `["${MARKER}",]`,
+        JSON.stringify(good).slice(0, 40),
+      ]
+    ) {
+      const { swamp, error } = await importing(text);
+      expect(error?.message).toBe(
+        "snapshot.json isn't valid JSON, so nothing was imported. (invalid_input)",
+      );
+      expect(`${error} ${error?.stack}`.includes(MARKER)).toBe(false);
+      expect(swamp.written).toEqual([]);
+      expect(swamp.logs).toEqual([]);
+    }
+  });
+
+  it("refuses JSON that isn't a snapshot before writing anything", async () => {
+    for (
+      const wrong of [
+        null,
+        [MARKER],
+        { ...good, format: MARKER },
+        { ...good, people: [{ userId: MARKER, name: 1 }] },
+        // A good person first, so a write before checking would show.
+        { ...good, requests: [{ request: { id: MARKER }, version: 0 }] },
+      ]
+    ) {
+      const { swamp, error } = await importing(JSON.stringify(wrong));
+      expect(error?.message).toMatch(
+        /^That isn't a capture-snapshot\/v1 file: .*\(invalid_input\)$/s,
+      );
+      expect(error!.message.includes(MARKER)).toBe(false);
+      expect(swamp.written).toEqual([]);
+    }
+  });
+});
+
 describe("arguments given as JSON text", () => {
   const review = {
     verdict: "ready",
