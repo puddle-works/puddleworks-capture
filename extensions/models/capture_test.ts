@@ -1021,8 +1021,34 @@ describe("arguments given as JSON text", () => {
       const r = parse(m, { ...rest, [key]: "[{not json" });
       expect(r.success).toBe(false);
       expect(r.error!.issues.map((i) => i.path.join("."))).toEqual([key]);
-      expect(r.error!.issues[0].message).toMatch(/^isn't valid JSON: /);
+      expect(r.error!.issues[0].message).toBe("isn't valid JSON.");
     }
+  });
+
+  it("never repeats the text it refused, so nothing secret in it leaks", async () => {
+    // V8's JSON errors quote about ten characters around the fault, so the
+    // synthetic secret is short enough to be quoted whole.
+    const MARKER = "SK_9f4c2e";
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    for (const [m, key, , rest] of cases) {
+      for (const bad of [MARKER, `{"k": ${MARKER}}`, `["${MARKER}",]`]) {
+        const r = parse(m, { ...rest, [key]: bad });
+        expect(r.success).toBe(false);
+        expect(JSON.stringify(r.error).includes(MARKER)).toBe(false);
+        expect(r.error!.message.includes(MARKER)).toBe(false);
+        let thrown = "";
+        try {
+          await run(m, { ...rest, [key]: bad });
+        } catch (e) {
+          thrown = `${e} ${(e as Error).message} ${(e as Error).stack}`;
+        }
+        expect(thrown.length > 0).toBe(true);
+        expect(thrown.includes(MARKER)).toBe(false);
+      }
+    }
+    expect(swamp.logs.join("\n").includes(MARKER)).toBe(false);
+    expect(JSON.stringify(swamp.written).includes(MARKER)).toBe(false);
   });
 
   it("refuses JSON of the wrong shape", () => {
@@ -1034,38 +1060,27 @@ describe("arguments given as JSON text", () => {
   });
 
   it("writes nothing when an argument is refused", async () => {
-    const { swamp, run } = setup();
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);
-    await expect.rejects(
-      run("create_request", {
-        as: "olive@example.com",
-        title: "Stock counts",
-        description: "",
-        candidateExtensions: "[{not json",
-      }),
-      expect.objectContaining({
-        message: expect.stringContaining("isn't valid JSON"),
-      }),
-    );
-    expect(swamp.written.filter((r) => r.specName === "request")).toEqual([]);
     const created = await run("create_request", {
-      as: "olive@example.com",
       title: "Stock counts",
       description: "",
       candidateExtensions: '["@swamp/git"]',
     });
     const id = String(swamp.data(created.dataHandles[0].name)!.id);
-    const before = swamp.written.length;
-    await expect.rejects(
-      run("edit_specification", {
-        as: "olive@example.com",
-        id,
-        specification: "{not json",
-      }),
-      expect.objectContaining({
-        message: expect.stringContaining("isn't valid JSON"),
-      }),
-    );
-    expect(swamp.written.length).toBe(before);
+    for (const [m, key, , rest] of cases) {
+      const written = swamp.written.length;
+      const logged = swamp.logs.length;
+      await expect.rejects(
+        run(m, { ...rest, ...("id" in rest && { id }), [key]: "{not json" }),
+        expect.objectContaining({
+          message: expect.stringContaining("isn't valid JSON."),
+        }),
+      );
+      expect(swamp.written.length).toBe(written);
+      expect(swamp.logs.length).toBe(logged);
+    }
+    expect(swamp.written.filter((r) => r.specName === "request").length)
+      .toBe(1);
   });
 });

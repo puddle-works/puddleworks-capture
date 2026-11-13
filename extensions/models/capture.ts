@@ -60,18 +60,17 @@ export type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
 /**
  * A value given as itself or as JSON text, as the command line sends it.
- * Text that isn't JSON fails validation, saying so, instead of throwing.
+ * Text that isn't JSON fails validation, saying so without repeating any of
+ * it, instead of throwing.
  */
 function jsonOr<T extends z.ZodType>(schema: T) {
   return z.preprocess((v, ctx) => {
     if (typeof v !== "string") return v;
     try {
       return JSON.parse(v);
-    } catch (e) {
-      ctx.addIssue({
-        code: "custom",
-        message: `isn't valid JSON: ${(e as Error).message}`,
-      });
+    } catch {
+      // The parser's own message can quote the text, so it isn't passed on.
+      ctx.addIssue({ code: "custom", message: "isn't valid JSON." });
       return z.NEVER;
     }
   }, schema);
