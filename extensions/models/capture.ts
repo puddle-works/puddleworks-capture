@@ -58,6 +58,24 @@ export const GlobalArgsSchema = z.object({
 /** The settings, as the methods see them. */
 export type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 
+/**
+ * A value given as itself or as JSON text, as the command line sends it.
+ * Text that isn't JSON fails validation, saying so without repeating any of
+ * it, instead of throwing.
+ */
+function jsonOr<T extends z.ZodType>(schema: T) {
+  return z.preprocess((v, ctx) => {
+    if (typeof v !== "string") return v;
+    try {
+      return JSON.parse(v);
+    } catch {
+      // The parser's own message can quote the text, so it isn't passed on.
+      ctx.addIssue({ code: "custom", message: "isn't valid JSON." });
+      return z.NEVER;
+    }
+  }, schema);
+}
+
 /** true or false, also as the text the command line sends. */
 const flag = z.preprocess(
   (v) => (v === "true" ? true : v === "false" ? false : v),
@@ -465,8 +483,7 @@ export const model = {
         phrase: z.string().max(500).default("").describe(
           "The turn a router couldn't answer. It becomes the requested phrase: the first example of the draft spec's recipe, which must stay as asked. Blank for none.",
         ),
-        candidateExtensions: z.preprocess(
-          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+        candidateExtensions: jsonOr(
           z.array(z.string().min(1).max(200)).max(50),
         ).default([]).describe(
           "Extensions a router's search found that may do most of the work, as a list or JSON text. They start the draft spec's recipe.",
@@ -804,8 +821,7 @@ export const model = {
       "Write the specification's current version. Builders can.",
       "Wrote the specification of",
       withId.extend({
-        specification: z.preprocess(
-          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+        specification: jsonOr(
           SpecificationContentSchema,
         ).describe(
           "problemStatement, desiredOutcome, scope {in, out}, constraints, assumptions, acceptanceCriteria [{id, text}] and recipe {examples [{phrase, answer}], pieces [{name, shape: int, repo or word}], whenEmpty, candidateExtensions} and effects {kind: read or write, changes: what it changes, needed for write}, as an object or JSON text. Leave recipe or effects out to keep the one there; a spec with no effects counts as write. A requested phrase must stay the recipe's first example.",
@@ -833,8 +849,7 @@ export const model = {
         reason: z.string().trim().min(1).max(2_000).describe(
           "Why the specification changed. It is kept on the new version and shown next to the agreement.",
         ),
-        specification: z.preprocess(
-          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+        specification: jsonOr(
           SpecificationContentSchema,
         ).optional().describe(
           "The revised specification, as edit_specification takes it: an object or JSON text.",
@@ -894,8 +909,7 @@ export const model = {
       "Record a review of the specification up for agreement: each finding becomes a question, the verdict a decision, and a major revision or not_safe asks for changes. Only a reviewer on the request can.",
       "Recorded a review of",
       withId.extend({
-        review: z.preprocess(
-          (v) => (typeof v === "string" ? JSON.parse(v) : v),
+        review: jsonOr(
           z.object({
             verdict: z.enum(REVIEW_VERDICTS),
             summary: z.string().max(2_000).optional(),
@@ -1070,9 +1084,17 @@ export const model = {
           const file = args.path.startsWith("/")
             ? args.path
             : `${context.repoDir}/${args.path}`;
-          const snapshot = JSON.parse(
-            await Deno.readTextFile(file),
-          ) as Snapshot;
+          const text = await Deno.readTextFile(file);
+          let snapshot: Snapshot;
+          try {
+            snapshot = JSON.parse(text);
+          } catch {
+            // The parser's own message can quote the file, so it isn't passed on.
+            throw new DomainError(
+              "invalid_input",
+              `${args.path} isn't valid JSON, so nothing was imported.`,
+            );
+          }
           const counts = await services.importSnapshot(snapshot);
           store.add(
             await context.writeResource("importResult", "import-latest", {

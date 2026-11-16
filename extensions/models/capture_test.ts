@@ -983,3 +983,177 @@ describe("@puddleworks/capture/requests", () => {
     }
   });
 });
+
+describe("importing a snapshot file that isn't one", () => {
+  // A short synthetic secret: V8's JSON errors quote about ten characters.
+  const MARKER = "SK_9f4c2e";
+  const good = {
+    format: "capture-snapshot/v1",
+    exportedAt: "2026-10-27T09:00:00.000Z",
+    people: [{
+      userId: "u-1",
+      name: "Olive",
+      email: "olive@example.com",
+      isBuilder: false,
+    }],
+    requests: [],
+  };
+
+  async function importing(text: string) {
+    const dir = await Deno.makeTempDir();
+    try {
+      await Deno.writeTextFile(`${dir}/snapshot.json`, text);
+      const swamp = new FakeSwamp();
+      const context = swamp.context(model.globalArguments.parse({}), dir);
+      const m = model.methods.import;
+      let error: Error | undefined;
+      try {
+        await m.execute(m.arguments.parse({ path: "snapshot.json" }), context);
+      } catch (e) {
+        error = e as Error;
+      }
+      return { swamp, error };
+    } finally {
+      await Deno.remove(dir, { recursive: true });
+    }
+  }
+
+  it("refuses text that isn't JSON, without quoting it, and writes nothing", async () => {
+    for (
+      const text of [
+        `{"format": ${MARKER}}`,
+        `["${MARKER}",]`,
+        JSON.stringify(good).slice(0, 40),
+      ]
+    ) {
+      const { swamp, error } = await importing(text);
+      expect(error?.message).toBe(
+        "snapshot.json isn't valid JSON, so nothing was imported. (invalid_input)",
+      );
+      expect(`${error} ${error?.stack}`.includes(MARKER)).toBe(false);
+      expect(swamp.written).toEqual([]);
+      expect(swamp.logs).toEqual([]);
+    }
+  });
+
+  it("refuses JSON that isn't a snapshot before writing anything", async () => {
+    for (
+      const wrong of [
+        null,
+        [MARKER],
+        { ...good, format: MARKER },
+        { ...good, people: [{ userId: MARKER, name: 1 }] },
+        // A good person first, so a write before checking would show.
+        { ...good, requests: [{ request: { id: MARKER }, version: 0 }] },
+      ]
+    ) {
+      const { swamp, error } = await importing(JSON.stringify(wrong));
+      expect(error?.message).toMatch(
+        /^That isn't a capture-snapshot\/v1 file: .*\(invalid_input\)$/s,
+      );
+      expect(error!.message.includes(MARKER)).toBe(false);
+      expect(swamp.written).toEqual([]);
+    }
+  });
+});
+
+describe("arguments given as JSON text", () => {
+  const review = {
+    verdict: "ready",
+    findings: [{ id: "F1", text: "Fine." }],
+  };
+  // Each argument a method takes as itself or as JSON text, with a valid value.
+  const cases: [MethodName, string, unknown, Record<string, unknown>][] = [
+    ["create_request", "candidateExtensions", ["@swamp/git"], {
+      title: "t",
+      description: "",
+    }],
+    ["edit_specification", "specification", goodSpec, { id: "1" }],
+    ["revise_specification", "specification", goodSpec, {
+      id: "1",
+      reason: "r",
+    }],
+    ["record_review", "review", review, { id: "1" }],
+  ];
+  const parse = (m: MethodName, input: Record<string, unknown>) =>
+    model.methods[m].arguments.safeParse(input);
+
+  it("takes the value itself or as JSON text, and the two read the same", () => {
+    for (const [m, key, value, rest] of cases) {
+      const native = parse(m, { ...rest, [key]: value });
+      const text = parse(m, { ...rest, [key]: JSON.stringify(value) });
+      expect(native.success).toBe(true);
+      expect(text.success).toBe(true);
+      // deno-lint-ignore no-explicit-any
+      expect((text as any).data[key]).toEqual((native as any).data[key]);
+    }
+  });
+
+  it("refuses text that isn't JSON as a validation failure, not a crash", () => {
+    for (const [m, key, , rest] of cases) {
+      const r = parse(m, { ...rest, [key]: "[{not json" });
+      expect(r.success).toBe(false);
+      expect(r.error!.issues.map((i) => i.path.join("."))).toEqual([key]);
+      expect(r.error!.issues[0].message).toBe("isn't valid JSON.");
+    }
+  });
+
+  it("never repeats the text it refused, so nothing secret in it leaks", async () => {
+    // V8's JSON errors quote about ten characters around the fault, so the
+    // synthetic secret is short enough to be quoted whole.
+    const MARKER = "SK_9f4c2e";
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    for (const [m, key, , rest] of cases) {
+      for (const bad of [MARKER, `{"k": ${MARKER}}`, `["${MARKER}",]`]) {
+        const r = parse(m, { ...rest, [key]: bad });
+        expect(r.success).toBe(false);
+        expect(JSON.stringify(r.error).includes(MARKER)).toBe(false);
+        expect(r.error!.message.includes(MARKER)).toBe(false);
+        let thrown = "";
+        try {
+          await run(m, { ...rest, [key]: bad });
+        } catch (e) {
+          thrown = `${e} ${(e as Error).message} ${(e as Error).stack}`;
+        }
+        expect(thrown.length > 0).toBe(true);
+        expect(thrown.includes(MARKER)).toBe(false);
+      }
+    }
+    expect(swamp.logs.join("\n").includes(MARKER)).toBe(false);
+    expect(JSON.stringify(swamp.written).includes(MARKER)).toBe(false);
+  });
+
+  it("refuses JSON of the wrong shape", () => {
+    for (const [m, key, , rest] of cases) {
+      for (const wrong of ['"just text"', "42", '{"x":1}', "[1,2]"]) {
+        expect(parse(m, { ...rest, [key]: wrong }).success).toBe(false);
+      }
+    }
+  });
+
+  it("writes nothing when an argument is refused", async () => {
+    const { swamp, run } = setup({ defaultAs: "olive@example.com" });
+    await people(run);
+    const created = await run("create_request", {
+      title: "Stock counts",
+      description: "",
+      candidateExtensions: '["@swamp/git"]',
+    });
+    const id = String(swamp.data(created.dataHandles[0].name)!.id);
+    for (const [m, key, , rest] of cases) {
+      const written = swamp.written.length;
+      const logged = swamp.logs.length;
+      await expect.rejects(
+        run(m, { ...rest, ...("id" in rest && { id }), [key]: "{not json" }),
+        expect.objectContaining({
+          message: expect.stringContaining("isn't valid JSON."),
+        }),
+      );
+      expect(swamp.written.length).toBe(written);
+      expect(swamp.logs.length).toBe(logged);
+    }
+    expect(swamp.written.filter((r) => r.specName === "request").length)
+      .toBe(1);
+  });
+});
