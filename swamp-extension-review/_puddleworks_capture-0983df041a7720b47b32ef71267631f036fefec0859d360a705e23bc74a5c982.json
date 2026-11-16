@@ -1,12 +1,12 @@
 {
-  "version": "2026.11.10.1",
+  "version": "2026.11.16.1",
   "extension": "@puddleworks/capture",
-  "reviewedAt": "2026-11-10T13:10:00Z",
+  "reviewedAt": "2026-11-16T10:40:00Z",
   "dimensions": [
     {
       "id": "credentials-secrets",
       "verdict": "pass",
-      "note": "The extension holds no credentials and reads no vault. record_router_test stores the tester's userId, a version, phrases and notes; nothing secret. record_build_result still fetches https only."
+      "note": "The extension holds no credentials and reads no vault. Since 2026.11.10.1, refused JSON text is no longer echoed: argument errors say only \"isn't valid JSON.\" and import says \"<path> isn't valid JSON, so nothing was imported.\", because V8's JSON.parse messages quote about ten characters of the input. A test sends a short synthetic secret in three malformed forms and checks it appears in no validation error, thrown error, stack, log or written data."
     },
     {
       "id": "logging-quality",
@@ -16,12 +16,12 @@
     {
       "id": "error-handling",
       "verdict": "pass",
-      "note": "Refusals are DomainErrors in plain words: not the outcome owner (not_allowed), no published build, another version, a phrase not agreed, or one twice (invalid_input/invalid_state). parseBuildResult names v1 and v2 when apiVersion is wrong. results that aren't JSON now fail validation instead of throwing a raw SyntaxError. candidateExtensions, specification and review still JSON.parse text without a catch; that is unchanged from 2026.11.09.2 and outside this release."
+      "note": "candidateExtensions, specification (edit and revise) and review now go through one jsonOr() preprocess: text that isn't JSON is a zod validation issue, not a raw SyntaxError, and the method never runs. import catches JSON.parse and raises invalid_input; valid JSON that isn't a snapshot is still refused by SnapshotSchema before any write. A missing import file still surfaces Deno's NotFound, naming the path the caller gave."
     },
     {
       "id": "testing-completeness",
       "verdict": "pass",
-      "note": "Domain tests cover each Released condition both ways: missing router test, not-answered with note, a phrase left out, latest test wins and a failing retest goes back to Building, a newly published version needs a new test, phrases as written, empty matching exactly, blank whenEmpty, v1 can't release but its evidence is shown, owner-only, wrong version, unknown or duplicate phrase, before publishing, and a request saved before router tests. Services and behavior tests run the whole path including a retry and bad JSON. The contract test reads Factory main's v1 and v2 examples (0a0236e). 67 tests pass."
+      "note": "69 tests pass (287 steps). New since 2026.11.10.1: for each of the four JSON-text arguments, native and JSON-text forms read the same, malformed text is one issue on that path with the fixed message, wrong-shaped JSON is refused, a synthetic secret never leaks, and a refused call writes no records and no logs. For import: three malformed files and five wrong shapes (null, array, wrong format, bad person, bad request after a good person) write nothing. The leak and malformed-file tests fail on the previous code."
     },
     {
       "id": "idempotency-resilience",
@@ -46,7 +46,7 @@
     {
       "id": "schema-strictness",
       "verdict": "pass",
-      "note": "record_router_test arguments: version trimmed 1–100, results 1–50 of {phrase trimmed 1–500, outcome enum, note ≤2000}. The v2 reader mirrors Factory's limits and drops unknown fields, as the contract allows."
+      "note": "Argument schemas are unchanged; jsonOr only replaces the inline JSON.parse preprocess. Import still validates with SnapshotSchema; its error embeds zod's issue list, which in zod 4.6.5 describes the expected shape, not the received value."
     },
     {
       "id": "lifetime-gc",
@@ -61,7 +61,7 @@
     {
       "id": "preflight-checks",
       "verdict": "pass",
-      "note": "recordRouterTest checks permission, then a published current build, then the version, then each phrase, before changing anything."
+      "note": "Malformed arguments are refused during argument parsing, before any service call. import parses and validates the whole snapshot before saving anything; a storage failure partway through saving could still leave a partial import, which bad input can't trigger."
     },
     {
       "id": "instance-names",
@@ -76,7 +76,7 @@
     {
       "id": "version-upgrades",
       "verdict": "pass",
-      "note": "Both behaviors move to 2026.11.10.1 with no-op upgrade entries; the settings are unchanged. routerTests is optional on stored requests and read as none when absent, so existing data needs no migration."
+      "note": "Both behaviors move to 2026.11.16.1 with no-op upgrade entries; settings and stored data are unchanged, so nothing needs migrating."
     }
   ]
 }
