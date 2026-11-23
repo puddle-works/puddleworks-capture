@@ -1,0 +1,81 @@
+id: 3b6f4c1e-8d2a-4f57-9c0b-5e1a7d9f2c64
+name: "@puddleworks/capture-stand-in"
+description: >-
+  Have a stand-in agent take its turn on a request where one person is both
+  the requester and the builder. Capture's rule picks the agent's role from
+  the request's status: the builder agent until the spec is agreed, the
+  requester agent from Agreed on. The agent may comment, ask, draft and
+  propose; Capture refuses anything it decides. Needs a
+  @puddleworks/capture/requests behavior named capture, and an agent behavior
+  with an invokeAndParse method, such as @mgreten/cli-agent, named by the
+  agent input.
+version: 1
+tags:
+  maxWallClock: "30m"
+inputs:
+  type: object
+  properties:
+    id:
+      type: string
+      description: The request's number, such as 12 or #12, or its id.
+    agent:
+      type: string
+      description: >-
+        The agent behavior that answers, such as a @mgreten/cli-agent behavior.
+        Its provider and model are its own settings.
+    standInAs:
+      type: string
+      description: >-
+        The stand-in's email in the people list, added with
+        add_person standIn=requester or standIn=builder.
+    point:
+      type: string
+      description: >-
+        The discussion point: clarify, recipe, effects, open_questions,
+        proposal, revision, router_test or duplicates. Blank: taken from where
+        the discussion is.
+      default: ""
+  required: [id, agent, standInAs]
+jobs:
+  - name: main
+    steps:
+      - name: prompt
+        description: Write the stand-in's prompt, if the rule gives it the turn
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: stand_in_prompt
+          inputs:
+            as: ${{ inputs.standInAs }}
+            id: ${{ inputs.id }}
+            point: ${{ inputs.point }}
+      - name: answer
+        description: The agent takes its turn and answers in JSON
+        task:
+          type: model_method
+          modelIdOrName: ${{ inputs.agent }}
+          methodName: invokeAndParse
+          inputs:
+            prompt: ${{ steps.prompt.outputs.prompt }}
+            tags:
+              capture-request: ${{ steps.prompt.outputs.requestId }}
+              capture-stand-in: ${{ steps.prompt.outputs.standIn }}
+        dependsOn:
+          - step: prompt
+            condition:
+              type: succeeded
+      - name: record_turn
+        description: Put what the agent said and drafted on the request
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: record_stand_in_turn
+          inputs:
+            as: ${{ inputs.standInAs }}
+            id: ${{ steps.prompt.outputs.requestId }}
+            point: ${{ steps.prompt.outputs.point }}
+            turn: ${{ steps.answer.outputs.parsedResponse }}
+        dependsOn:
+          - step: answer
+            condition:
+              type: succeeded

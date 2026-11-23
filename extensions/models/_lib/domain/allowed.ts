@@ -12,6 +12,14 @@ import { can, canRead, canStartBuilding, roleOf } from "./permissions.ts";
 import { canEditDetails } from "./request.ts";
 import { BUILT_FROM_AGREED } from "./specification.ts";
 
+/** What a stand-in agent may be offered; see STAND_IN_PERMISSIONS. */
+const STAND_IN_ACTIONS: readonly string[] = [
+  "message",
+  "editSpecification",
+  "propose",
+  "revise",
+];
+
 export type AllowedAction =
   | Action
   | "editDetails"
@@ -81,5 +89,8 @@ export function allowedActions(
   if (can(role, "export") && built) allowed.push("export");
   if (open && can(role, "message")) allowed.push("message");
   if (open && can(role, "invite")) allowed.push("invite");
-  return allowed;
+  // A stand-in agent never decides: only the steps the API lets it take.
+  return person.standIn
+    ? allowed.filter((a) => STAND_IN_ACTIONS.includes(a))
+    : allowed;
 }

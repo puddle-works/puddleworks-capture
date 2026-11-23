@@ -55,6 +55,29 @@ const GRANTS: Record<Role, readonly Permission[]> = {
   reviewer: ["message", "requestChanges"],
 };
 
+/**
+ * All a stand-in agent may do, whatever its role on the request: talk, draft
+ * and propose, including a revision. Agreeing, asking for changes, resolving
+ * questions, recording builds and router tests, withdrawing and every other
+ * decision stay with a person.
+ */
+export const STAND_IN_PERMISSIONS: readonly Permission[] = [
+  "message",
+  "editSpecification",
+  "propose",
+  "revise",
+];
+
+/** Refuses a stand-in agent, for a step that isn't a permission. */
+export function refuseStandIn(actor: Person, doing: string): void {
+  if (actor.standIn) {
+    throw new DomainError(
+      "not_allowed",
+      `A stand-in agent can't ${doing}; a person decides that.`,
+    );
+  }
+}
+
 export function can(role: Role, permission: Permission): boolean {
   return GRANTS[role].includes(permission);
 }
@@ -129,6 +152,9 @@ export function requirePermission(
       "not_allowed",
       `As ${ROLE_WORDS[role]} you can't ${PERMISSION_WORDS[permission]}.`,
     );
+  }
+  if (!STAND_IN_PERMISSIONS.includes(permission)) {
+    refuseStandIn(actor, PERMISSION_WORDS[permission]);
   }
   return role;
 }

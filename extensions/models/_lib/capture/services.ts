@@ -7,7 +7,9 @@ import {
   canRead,
   closeAsDuplicate,
   createRequest,
+  currentPoint,
   decline,
+  type DiscussionPoint,
   DomainError,
   editDetails,
   editSpecification,
@@ -22,17 +24,20 @@ import {
   parseBuildResult,
   type Participant,
   type Person,
+  possibleDuplicates,
   postMessage,
   propose,
   recordBuildResult,
   recordExport,
   recordReview,
   recordRouterTest,
+  recordStandInTurn,
   removeParticipant,
   type Request,
   requestChanges,
   type RequestDetails,
   type RequestStatus,
+  requireStandInTurn,
   resolveQuestion,
   type Review,
   reviewPrompt,
@@ -44,6 +49,9 @@ import {
   specHashInput,
   type SpecificationContent,
   SpecificationContentSchema,
+  standInPrompt,
+  type StandInRole,
+  type StandInTurn,
   startBuilding,
   submit,
   toMarkdown,
@@ -119,13 +127,24 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     return (await store.allPeople()).find((p) => p.email === wanted);
   }
 
-  /** Who `email` is. Capture acts only for people in its people list. */
-  async function actor(email: string): Promise<Person> {
+  /**
+   * Who `email` is. Capture acts only for people in its people list. A
+   * stand-in agent acts only through its turn (stand_in_prompt and
+   * record_stand_in_turn), which checks the rule first, so every other
+   * method refuses it.
+   */
+  async function actor(email: string, standInTurn = false): Promise<Person> {
     const person = await personByEmail(email);
     if (!person) {
       throw new DomainError(
         "not_found",
         `${email} isn't in Capture's people list. Add them with add_person, then try again.`,
+      );
+    }
+    if (person.standIn && !standInTurn) {
+      throw new DomainError(
+        "not_allowed",
+        `${person.name} is a stand-in agent; it acts only through stand_in_prompt and record_stand_in_turn.`,
       );
     }
     return person;
@@ -187,9 +206,29 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     return saved;
   }
 
+  /**
+   * The request and the stand-in, once the rule gives it a turn. The stand-in
+   * may not be on the request yet, so it isn't read as the stand-in.
+   */
+  async function standInTurn(as: string, id: string, point?: DiscussionPoint) {
+    const standIn = await actor(as, true);
+    const stored = await find(id);
+    if (!stored) {
+      throw new DomainError("not_found", "There is no such request.");
+    }
+    const at = point ?? currentPoint(stored.request);
+    requireStandInTurn(stored.request, await store.allPeople(), standIn, at);
+    return { stored, standIn, at };
+  }
+
   return {
     async addPerson(
-      input: { email: string; name: string; builder: boolean },
+      input: {
+        email: string;
+        name: string;
+        builder: boolean;
+        standIn?: StandInRole;
+      },
     ): Promise<Person> {
       const email = input.email.trim().toLowerCase();
       if (await personByEmail(email)) {
@@ -203,6 +242,7 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         name: input.name.trim(),
         email,
         isBuilder: input.builder,
+        ...(input.standIn && { standIn: input.standIn }),
       };
       await store.savePerson(person);
       return person;
@@ -212,7 +252,7 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     async updatePerson(
       input: { email: string; name?: string; builder?: boolean },
     ): Promise<Person> {
-      const found = await actor(input.email);
+      const found = await actor(input.email, true);
       const person: Person = {
         ...found,
         name: input.name?.trim() ?? found.name,
@@ -536,6 +576,59 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       const stored = await load(person, id);
       const version = reviewVersion(stored.request, person);
       return { stored, version, prompt: reviewPrompt(stored.request) };
+    },
+
+    /**
+     * What a stand-in agent is asked now, and about which point; it takes
+     * the point from where the discussion is when none is given. Refused
+     * unless the rule gives this stand-in a turn.
+     */
+    async standInPrompt(
+      as: string,
+      id: string,
+      point?: DiscussionPoint,
+    ): Promise<
+      {
+        stored: Stored;
+        standIn: StandInRole;
+        point: DiscussionPoint;
+        prompt: string;
+      }
+    > {
+      const { stored, standIn, at } = await standInTurn(as, id, point);
+      const all = await store.allRequests();
+      return {
+        stored,
+        standIn: standIn.standIn!,
+        point: at,
+        prompt: standInPrompt(
+          stored.request,
+          standIn,
+          at,
+          possibleDuplicates(stored.request, all),
+        ),
+      };
+    },
+
+    /** A stand-in agent's turn, joining the request first if it isn't on it. */
+    async recordStandInTurn(
+      as: string,
+      id: string,
+      turn: StandInTurn,
+      point?: DiscussionPoint,
+    ): Promise<Stored> {
+      const { stored, standIn } = await standInTurn(as, id, point);
+      const next = recordStandInTurn(
+        stored.request,
+        standIn,
+        turn,
+        { newId },
+        clock(),
+      );
+      if (next === stored.request) return stored;
+      const saved = { ...stored, request: next, version: stored.version + 1 };
+      await store.saveRequest(saved);
+      return saved;
     },
 
     /** `version`, when given, is the one reviewed; a newer one refuses it. */

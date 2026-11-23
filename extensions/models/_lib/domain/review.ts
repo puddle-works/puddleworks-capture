@@ -7,7 +7,7 @@ import { postMessage } from "./discussion.ts";
 import { DomainError } from "./errors.ts";
 import { statusWords } from "./lifecycle.ts";
 import type { Person, Request } from "./model.ts";
-import { roleOf } from "./permissions.ts";
+import { refuseStandIn, roleOf } from "./permissions.ts";
 import { latestSpecification, requestChanges } from "./specification.ts";
 
 export const REVIEW_VERDICTS = [
@@ -39,6 +39,7 @@ export type Review = z.input<typeof ReviewSchema>;
 
 /** The specification up for agreement, when the person acting may review it. */
 function underReview(request: Request, actor: Person) {
+  refuseStandIn(actor, "review the specification");
   if (roleOf(request, actor.userId) !== "reviewer") {
     throw new DomainError(
       "not_allowed",
