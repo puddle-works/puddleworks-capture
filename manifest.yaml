@@ -29,6 +29,9 @@ description: |
     rules decide what they may do.
   - `@puddleworks/capture/web`: a read-only page on 127.0.0.1 showing every
     request and the people list, reloaded as the data changes.
+  - `@puddleworks/capture/slack`: each request discussed in its own Slack
+    thread, with buttons for each person's steps, acting as the person whose
+    Slack email is in the people list.
 
   ## Workflows
 
@@ -40,6 +43,9 @@ description: |
     specification up for agreement; its findings become questions the outcome
     owner must settle before agreeing. Bring your own agent behavior, such as
     `@mgreten/cli-agent`.
+  - `@puddleworks/capture-stand-in`: when one person is both requester and
+    builder, a stand-in agent takes the other role's turn in the discussion.
+    It may ask, answer, draft and propose; it never decides.
 repository: "https://github.com/puddle-works/puddleworks-capture"
 visibility: public
 license: MIT
@@ -49,9 +55,11 @@ labels:
 models:
   - capture.ts
   - capture_web.ts
+  - capture_slack.ts
 workflows:
   - workflow-capture-log-request.yaml
   - workflow-capture-review-spec.yaml
+  - workflow-capture-stand-in.yaml
 additionalFiles:
   - README.md
   - LICENSE

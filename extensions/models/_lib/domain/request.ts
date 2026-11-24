@@ -14,7 +14,11 @@ import {
   type RequestStatus,
   type Role,
 } from "./model.ts";
-import { participantOf, requirePermission } from "./permissions.ts";
+import {
+  participantOf,
+  refuseStandIn,
+  requirePermission,
+} from "./permissions.ts";
 import { startingSpec } from "./recipe.ts";
 
 /**
@@ -28,6 +32,7 @@ export function createRequest(
   at: string,
   loggedBy?: LoggedBy,
 ): Request {
+  refuseStandIn(owner, "own a request");
   const parsed = NewRequestSchema.safeParse(input);
   if (!parsed.success) {
     throw new DomainError(
@@ -223,6 +228,7 @@ export function closeAsDuplicate(
   actor: Person,
   at: string,
 ): Request {
+  refuseStandIn(actor, "close a request as a duplicate");
   if (actor.userId !== request.outcomeOwnerId && !actor.isBuilder) {
     throw new DomainError(
       "not_allowed",
@@ -287,6 +293,7 @@ export function joinAsBuilder(
   actor: Person,
   at: string,
 ): Request {
+  refuseStandIn(actor, "join a request on its own; the person invites it");
   if (!actor.isBuilder) {
     throw new DomainError("not_allowed", "Only builders can join a request.");
   }
@@ -324,6 +331,12 @@ export function inviteParticipant(
     );
   }
   requireOpen(request, "inviting people");
+  if (invitee.standIn) {
+    throw new DomainError(
+      "not_allowed",
+      `${invitee.name} is a stand-in agent; it joins only when one person is both requester and builder, on its turn.`,
+    );
+  }
   if (participantOf(request, invitee.userId)) {
     throw new DomainError(
       "invalid_state",
@@ -418,6 +431,7 @@ export function transferOwnership(
       `${to.name} is already the outcome owner.`,
     );
   }
+  refuseStandIn(to, "own a request");
   const from = participantOf(request, request.outcomeOwnerId)!;
   const others = request.participants.filter((p) =>
     p.userId !== from.userId && p.userId !== to.userId

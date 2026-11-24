@@ -38,6 +38,8 @@ putting it in front of people is
 | `@puddleworks/capture/web`                    | `serve`: the read-only page on 127.0.0.1                            |
 | `@puddleworks/capture-log-request` (workflow) | Logs a request from a program, once per `sourceRef`                 |
 | `@puddleworks/capture-review-spec` (workflow) | Has an agent review the spec up for agreement                       |
+| `@puddleworks/capture/slack`                  | `serve`: each request discussed in its own Slack thread             |
+| `@puddleworks/capture-stand-in` (workflow)    | A stand-in agent's turn when one person is requester and builder    |
 
 Set it up in a swamp repository:
 
@@ -348,6 +350,90 @@ reviewer on it, and a review of a version that is no longer up for agreement is
 refused. The review criteria follow the work-item lens of
 [`@atalanta/sdlc-review-lenses`](https://github.com/Atalanta/swamp-sdlc-review-lenses)
 (MIT), rewritten for outcome-spec fields.
+
+### Discuss requests in Slack
+
+`@puddleworks/capture/slack` runs a Slack app (Socket Mode, so it needs no
+public URL) that gives each request one thread in a channel. It calls Capture's
+methods itself, one `swamp behavior run` each, so Capture's rules decide every
+step.
+
+- `/capture` raises a request as a draft; Submit starts its thread.
+  `/capture
+  12` shows your steps on #12.
+- A reply in a request's thread is posted on the request as you.
+- Buttons are shown only to you, and only for steps Capture would let you take
+  now: Submit, Propose, Agree, Ask for changes and Withdraw for the outcome
+  owner; Join, Edit spec and Record build for builders; Mark answered for open
+  questions.
+- Agreed, Building, Released and a failed router test are posted into the
+  thread.
+- Each Slack user is matched by their Slack email to the people list, and every
+  method runs with that person as `as`. Anyone not on the list is refused, and
+  nothing in a Slack payload can change who acts.
+
+Create the Slack app from
+[`docs/slack/capture-app-manifest.yaml`](docs/slack/capture-app-manifest.yaml),
+put its tokens in a vault, and set the behavior up with vault expressions:
+
+```bash
+swamp vault create local_encryption capture-slack
+swamp vault put capture-slack bot-token   # prompts; paste the xoxb- token
+swamp vault put capture-slack app-token   # prompts; paste the xapp- token
+swamp behavior create @puddleworks/capture/slack slack \
+  --global-arg channel=C0123ABCD \
+  --global-arg "botToken=\${{ vault.get('capture-slack', 'bot-token') }}" \
+  --global-arg "appToken=\${{ vault.get('capture-slack', 'app-token') }}"
+swamp behavior run slack serve   # until stopped; run it as a service
+```
+
+Each thread's place is kept as `thread-<requestId>` data, so a restart picks up
+where it left off.
+
+### Stand-in agents
+
+When one person is both a request's outcome owner and its builder, a stand-in
+agent takes the role they aren't playing, so the request is still discussed by
+two sides. Each agent is its own entry in the people list, so the history shows
+what it said:
+
+```bash
+swamp behavior run capture add_person --input email=builder-agent@example.com \
+  --input name="Builder agent" --input standIn=builder
+swamp behavior run capture add_person --input email=requester-agent@example.com \
+  --input name="Requester agent" --input standIn=requester
+```
+
+Which role the person plays is one rule, `personPlays` in
+`extensions/models/_lib/domain/stand_in.ts`: before the spec is agreed (draft,
+discussing, ready for agreement) they are the requester and the builder agent
+joins; from Agreed on they are the builder and the requester agent joins. A
+revision of an agreed spec counts as the builder's, so while it waits for
+agreement the requester agent challenges it; accepting it is still the person's.
+When the requester and the builder are different people, neither agent joins.
+
+The builder agent asks about the current process, drafts the recipe and the
+reads-or-writes section, proposes the spec and raises revisions. The requester
+agent answers from the request as written, challenges the recipe and `effects`,
+and flags drift from what was asked. Capture enforces in code that a stand-in
+only talks, drafts and proposes: it can't agree, ask for changes, resolve a
+question, post a decision, record a build or a router test, withdraw, close a
+duplicate, own a request or be invited, and every method other than
+`stand_in_prompt` and `record_stand_in_turn` refuses it.
+
+`@puddleworks/capture-stand-in` runs one turn with an agent behavior such as
+`@mgreten/cli-agent`, as `capture-review-spec` does. The Slack app runs it when
+the person replies, submits, edits the spec, asks for changes or resolves a
+question, and when a revision or a failed router test arrives:
+
+```bash
+swamp extension pull @mgreten/cli-agent
+swamp behavior create @mgreten/cli-agent stand-in-agent \
+  --global-arg defaultProvider=claude --global-arg defaultModel=sonnet
+swamp behavior edit slack   # set agent: stand-in-agent, builderAgentAs, requesterAgentAs
+swamp workflow run @puddleworks/capture-stand-in --input id=12 \
+  --input agent=stand-in-agent --input standInAs=builder-agent@example.com
+```
 
 ### Develop
 

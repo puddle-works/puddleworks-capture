@@ -27,12 +27,21 @@ export const ROLES = [
 ] as const;
 export type Role = (typeof ROLES)[number];
 
-/** Who is acting. `isBuilder` says they are one of the platform's builders. */
+/** The roles a stand-in agent can take for a person who holds both. */
+export const STAND_IN_ROLES = ["requester", "builder"] as const;
+export type StandInRole = (typeof STAND_IN_ROLES)[number];
+
+/**
+ * Who is acting. `isBuilder` says they are one of the platform's builders.
+ * `standIn` marks an agent that stands in for that role when one person
+ * holds both; it may talk, draft and propose, but never decide.
+ */
 export interface Person {
   userId: string;
   name: string;
   email: string;
   isBuilder: boolean;
+  standIn?: StandInRole;
 }
 
 /** Name and email are copied when someone joins, so exports read the same later. */

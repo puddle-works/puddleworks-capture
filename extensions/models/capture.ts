@@ -19,6 +19,7 @@
  * - `view`: one request as the person asking sees it (`view-<id>`).
  * - `requestList`: the requests in one scope and status (`requests-<scope>-<status>`).
  * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
+ * - `standInPrompt`: what a stand-in agent is asked on its turn (`stand-in-prompt-<id>`).
  * - `outcomeSpec`: the outcome-spec/v1 document, written on agreeing and on
  *   each export (`outcome-spec-<id>`).
  * - `outcomeSpecMarkdown`: the same, as Markdown (`outcome-spec-md-<id>`).
@@ -30,6 +31,7 @@
 import { z } from "npm:zod@4.6.5";
 import {
   currentBuild,
+  DISCUSSION_POINTS,
   DomainError,
   EXPORT_FORMATS,
   releaseProblems,
@@ -38,6 +40,8 @@ import {
   ROLES,
   ROUTER_TEST_OUTCOMES,
   SpecificationContentSchema,
+  STAND_IN_ROLES,
+  StandInTurnSchema,
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
 import type { Snapshot } from "./_lib/capture/snapshot.ts";
@@ -89,6 +93,11 @@ const id = z.string().min(1).max(100).describe(
   "The request's number, such as 12 or #12, or its id.",
 );
 const withId = z.object({ as, id });
+/** A discussion point; blank, as a workflow passes it, means none. */
+const point = z.preprocess(
+  (v) => (v === "" ? undefined : v),
+  z.enum(DISCUSSION_POINTS).optional(),
+);
 const reason = (what: string) =>
   z.string().max(2_000).default("").describe(what);
 
@@ -322,6 +331,7 @@ export const model = {
         name: z.string(),
         email: z.string(),
         isBuilder: z.boolean(),
+        standIn: z.enum(STAND_IN_ROLES).optional(),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 10,
@@ -370,6 +380,19 @@ export const model = {
         requestId: z.string(),
         number: z.number().int().nullable(),
         version: z.number().int(),
+        prompt: z.string(),
+      }),
+      lifetime: "infinite" as const,
+      garbageCollection: 10,
+    },
+    standInPrompt: {
+      description:
+        "What a stand-in agent is asked on its turn, and about which discussion point.",
+      schema: z.object({
+        requestId: z.string(),
+        number: z.number().int().nullable(),
+        standIn: z.enum(STAND_IN_ROLES),
+        point: z.enum(DISCUSSION_POINTS),
         prompt: z.string(),
       }),
       lifetime: "infinite" as const,
@@ -435,9 +458,17 @@ export const model = {
         builder: flag.default(false).describe(
           "Whether they are one of the builders.",
         ),
+        standIn: z.enum(STAND_IN_ROLES).optional().describe(
+          "Marks a stand-in agent, not a person: requester or builder. It takes that role when one person holds both, and may only talk, draft and propose.",
+        ),
       }),
       execute: (
-        args: { email: string; name: string; builder: boolean },
+        args: {
+          email: string;
+          name: string;
+          builder: boolean;
+          standIn?: (typeof STAND_IN_ROLES)[number];
+        },
         context: CaptureContext,
       ) =>
         run(context, async (services) => {
@@ -911,6 +942,53 @@ export const model = {
           );
         }),
     },
+    stand_in_prompt: {
+      description:
+        "Write what a stand-in agent is asked on its turn (stand-in-prompt-<id>). Refused unless one person holds both roles on the request and, for its status, the rule gives this stand-in's role the turn: the builder agent until the spec is agreed, the requester agent from Agreed on.",
+      arguments: withId.extend({
+        point: point.describe(
+          "The discussion point: clarify, recipe, effects, open_questions, proposal, revision, router_test or duplicates. Left out or blank, it is taken from where the discussion is.",
+        ),
+      }),
+      execute: (
+        args: {
+          as?: string;
+          id: string;
+          point?: (typeof DISCUSSION_POINTS)[number];
+        },
+        context: CaptureContext,
+      ) =>
+        run(context, async (services, store) => {
+          const who = actingAs(args, context);
+          const { stored, standIn, point, prompt } = await services
+            .standInPrompt(who, args.id, args.point);
+          const { id } = stored.request;
+          store.add(
+            await context.writeResource(
+              "standInPrompt",
+              `stand-in-prompt-${id}`,
+              { requestId: id, number: stored.number, standIn, point, prompt },
+            ),
+          );
+          context.logger.info(
+            "Wrote the {standIn} agent's prompt on {point} for request #{number} ({id})",
+            { standIn, point, number: stored.number, id },
+          );
+        }),
+    },
+    record_stand_in_turn: change(
+      "Record a stand-in agent's turn: its comments and questions, and the builder agent's draft, proposal or revision. It joins the request first if it isn't on it. Refused unless the rule gives it the turn, as for stand_in_prompt. It can never agree, ask for changes, resolve questions, record builds or router tests, withdraw, or close a duplicate.",
+      "Recorded a stand-in turn on",
+      withId.extend({
+        point: point.describe(
+          "The discussion point the turn was asked about, as stand_in_prompt took it.",
+        ),
+        turn: jsonOr(StandInTurnSchema).describe(
+          "{ messages: [{ kind: comment | question, body }], specification?, propose?, revisionReason? }, as an object or JSON text.",
+        ),
+      }),
+      (s, who, a) => s.recordStandInTurn(who, a.id, a.turn, a.point),
+    ),
     record_review: change(
       "Record a review of the specification up for agreement: each finding becomes a question, the verdict a decision, and a major revision or not_safe asks for changes. Only a reviewer on the request can.",
       "Recorded a review of",

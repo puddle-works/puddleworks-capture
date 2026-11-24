@@ -72,12 +72,14 @@ export function fromResource(data: Record<string, unknown>): Stored {
   };
 }
 
-function toPerson(data: Record<string, unknown>): Person {
+export function toPerson(data: Record<string, unknown>): Person {
   return {
     userId: String(data.userId),
     name: String(data.name),
     email: String(data.email),
     isBuilder: data.isBuilder === true,
+    ...((data.standIn === "requester" || data.standIn === "builder") &&
+      { standIn: data.standIn }),
   };
 }
 

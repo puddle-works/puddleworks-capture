@@ -6,7 +6,7 @@ import {
   type Person,
   type Request,
 } from "./model.ts";
-import { requirePermission } from "./permissions.ts";
+import { refuseStandIn, requirePermission } from "./permissions.ts";
 import { requireOpen } from "./request.ts";
 
 export const NewMessageSchema = z.object({
@@ -24,6 +24,7 @@ export function postMessage(
 ): Request {
   requirePermission(request, actor, "message");
   requireOpen(request, "posting");
+  if (input.kind === "decision") refuseStandIn(actor, "post a decision");
   const parsed = NewMessageSchema.safeParse(input);
   if (!parsed.success) {
     throw new DomainError(
