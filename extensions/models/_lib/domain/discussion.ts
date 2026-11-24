@@ -1,4 +1,4 @@
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { DomainError } from "./errors.ts";
 import {
   type Message,

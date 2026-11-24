@@ -10,7 +10,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { VIEWER_ASSETS } from "./_lib/web/assets.ts";
 import { serveViewer, type ViewerContext } from "./_lib/web/serve.ts";
 
@@ -26,7 +26,7 @@ export type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 /** The behavior type: serves the read-only Capture page. */
 export const model = {
   type: "@puddleworks/capture/web",
-  version: "2026.11.24.1",
+  version: "2026.11.24.2",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -116,6 +116,12 @@ export const model = {
       toVersion: "2026.11.24.1",
       description:
         "Released with the Slack app and stand-in agents; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.24.2",
+      description:
+        "Released with the Capture app for the swamp dashboard; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

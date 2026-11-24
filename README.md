@@ -62,6 +62,49 @@ script or an agent reads requests through the methods (`get_request`,
 `list_requests`) or with `swamp data query`, where Capture's rules decide what
 the person acting may see; a draft, for one, is its outcome owner's alone.
 
+### The page in the swamp dashboard (prototype)
+
+The same page also ships as a Swamp app, `@puddleworks/capture`, in
+`extensions/apps/capture/`. It shows in `swamp dashboard` and under
+`swamp serve`, with no `serve` method running, and needs a Swamp release with
+apps support (20261124 or later). Enable it after pulling the extension:
+
+```bash
+swamp extension pull @puddleworks/capture
+swamp app approve @puddleworks/capture   # shows what it asks for, then enables it
+swamp dashboard                          # Apps → Capture
+```
+
+Under `swamp serve --dashboard`, approving needs `admin` on
+`access:swamp/app-approval`. The app reads as the person viewing it, so a viewer
+needs `read` on the app and on the requests behavior's data:
+
+```bash
+swamp access grant create --subject group:ops --allow read --on 'access:swamp/apps/@puddleworks/capture'
+swamp access grant create --subject group:ops --allow read --on 'data:capture'
+```
+
+Without the first, the app isn't listed and its address says it isn't available.
+Without the second, it opens and shows serve's refusal.
+
+It only reads. It asks for `data:read` and nothing else: no workflows to run and
+no methods. It reads the people list and requests of one requests behavior with
+`data.query`, and reads them again when `data.subscribe` says they changed. It
+picks the behavior when it opens: the one named `capture`, or else the first by
+name that has people; reload the app after adding the first person. As on the
+served page, everyone who can open it sees every request and everyone's email.
+
+**It sends nothing to any site.** Capture holds people's emails, so the app
+calls no external site and loads nothing from one. Swamp lets an app send what
+it reads to any https site, so the app's page sets its own policy,
+`connect-src 'none'; img-src data:`, which the browser applies as well as
+swamp's. The app talks to swamp only over the dashboard's message port. A link
+in a request, such as a build's pull request, opens in a new tab when you follow
+it, and only an https link opens. `tests/app_test.ts` fails if the app asks for
+more than `data:read`, if that policy loosens, or if its code, or the shared
+page code it bundles, calls a site or navigates away. The policy also blocks the
+hot-reload socket of `swamp app dev`, so reload by hand there.
+
 ### Who acts
 
 Every method acts as one person in the people list: `--input as=<email>`, or the
@@ -465,6 +508,17 @@ again when the data changes), built by `web/build.ts` into
 `extensions/models/_lib/web/assets.ts`. A test fails while that file is older
 than its source. The domain rules are in `extensions/models/_lib/domain/`, pure
 TypeScript with no I/O.
+
+The Capture app builds the same page components for the browser, with Bun and
+Vite; its `src/` reads swamp data through the dashboard and renders
+`page/view.ts` with Preact. Build it before pushing; push refuses an app with no
+build:
+
+```bash
+cd extensions/apps/capture
+bun install && bun run check   # typecheck, the shared page code included
+swamp app build                # writes dist/, which git ignores
+```
 
 To try the extension from this checkout without publishing, in another swamp
 repository: `swamp extension source add <path to this checkout>`.

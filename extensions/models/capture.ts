@@ -28,7 +28,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import {
   currentBuild,
   DISCUSSION_POINTS,
@@ -211,7 +211,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.24.1",
+  version: "2026.11.24.2",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -309,6 +309,12 @@ export const model = {
       toVersion: "2026.11.24.1",
       description:
         "Stand-in agents: add_person standIn, stand_in_prompt and record_stand_in_turn, and every deciding step refused from a stand-in; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.24.2",
+      description:
+        "zod 4.6.7, past advisory GHSA-mrhx-c7xc-m3w5; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

@@ -1,0 +1,5 @@
+node_modules
+# swamp app build writes it; push refuses the app without it
+dist
+# written by swamp on app init, dev and build
+.swamp-platform

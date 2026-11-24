@@ -2,7 +2,7 @@
 // the discussion reads the version up for agreement and says what's missing,
 // vague or untestable. Its findings become questions, so agreement waits for
 // them.
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { postMessage } from "./discussion.ts";
 import { DomainError } from "./errors.ts";
 import { statusWords } from "./lifecycle.ts";
