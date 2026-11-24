@@ -53,6 +53,8 @@ export interface ThreadRecord {
   status: string;
   routerTests: number;
   shownMessages: number;
+  /** Transitions already announced; absent on a thread saved before. */
+  shownTransitions?: number;
 }
 
 export interface ThreadStore {
@@ -125,6 +127,7 @@ export function createApp(deps: AppDeps, config: AppConfig) {
   const fromSlack: string[] = [];
   const agentRunning = new Set<string>();
   let queue: Promise<unknown> = Promise.resolve();
+  let polling = false;
 
   /** One step at a time, so reads and writes don't interleave. */
   function serial<T>(job: () => Promise<T>): Promise<T> {
@@ -194,7 +197,8 @@ export function createApp(deps: AppDeps, config: AppConfig) {
       type: "button",
       text: plain(BUTTONS[a]),
       action_id: `capture:${a}`,
-      value: request.id,
+      // Agree names the version shown, so a stale button can't agree to a newer one.
+      value: a === "agree" ? `${request.id}|${latest?.version}` : request.id,
       ...(a === "agree" && { style: "primary" }),
       ...(a === "withdraw" && { style: "danger" }),
     }));
@@ -337,6 +341,7 @@ export function createApp(deps: AppDeps, config: AppConfig) {
         status: request.status,
         routerTests: (request.routerTests ?? []).length,
         shownMessages: 0,
+        shownTransitions: request.transitions.length,
       };
       await threads.save(thread);
       const dupes = possibleDuplicates(request, all);
@@ -349,59 +354,68 @@ export function createApp(deps: AppDeps, config: AppConfig) {
         );
       }
     }
+    // Saved after each post, so a sync that fails partway never posts twice.
     const next = { ...thread };
+    const save = async () => {
+      await threads.save({ ...next });
+    };
+    const people = await read.people();
     for (const m of request.messages.slice(thread.shownMessages)) {
       const key = fromSlack.indexOf(`${m.authorId}\u0000${m.body}`);
       if (key >= 0) {
         fromSlack.splice(key, 1);
-        continue;
+      } else {
+        const agent = people.find((p) => p.userId === m.authorId && p.standIn);
+        const kind = m.kind === "question"
+          ? "Question: "
+          : m.kind === "decision"
+          ? "Decision: "
+          : "";
+        await post(
+          thread,
+          agent ? `${kind}${m.body}` : `*${m.authorName}:* ${kind}${m.body}`,
+          agent ? `${agent.name} (stand-in)` : undefined,
+        );
       }
-      const agent = (await read.people()).find((p) =>
-        p.userId === m.authorId && p.standIn
-      );
-      const kind = m.kind === "question"
-        ? "Question: "
-        : m.kind === "decision"
-        ? "Decision: "
-        : "";
-      await post(
-        thread,
-        agent ? `${kind}${m.body}` : `*${m.authorName}:* ${kind}${m.body}`,
-        agent ? `${agent.name} (stand-in)` : undefined,
-      );
+      next.shownMessages++;
+      await save();
     }
-    next.shownMessages = request.messages.length;
     let routerFailed = false;
     const tests = request.routerTests ?? [];
     for (const t of tests.slice(thread.routerTests)) {
       const missed = t.results.filter((r) => r.outcome === "not-answered");
-      if (missed.length === 0) continue;
-      routerFailed = true;
-      await post(
-        thread,
-        `:x: Router test of ${t.version} failed: ${
-          missed.map((r) => `“${r.phrase}”${r.note ? ` (${r.note})` : ""}`)
-            .join(", ")
-        } wasn't answered.`,
-      );
+      if (missed.length > 0) {
+        routerFailed = true;
+        await post(
+          thread,
+          `:x: Router test of ${t.version} failed: ${
+            missed.map((r) => `“${r.phrase}”${r.note ? ` (${r.note})` : ""}`)
+              .join(", ")
+          } wasn't answered.`,
+        );
+      }
+      next.routerTests++;
+      await save();
     }
-    next.routerTests = tests.length;
+    // Every Agreed, Building and Released since the last look, even two in one poll.
+    const shown = thread.shownTransitions ?? request.transitions.length;
+    for (const t of request.transitions.slice(shown)) {
+      if (t.from !== t.to && ANNOUNCED[t.to]) {
+        const agreed = t.to === "agreed" &&
+          request.agreements.find((a) => a.agreedAt === t.at);
+        await post(
+          thread,
+          `*${ANNOUNCED[t.to]}*${
+            agreed ? ` (version ${agreed.specVersion})` : ""
+          }`,
+        );
+      }
+      next.shownTransitions = (next.shownTransitions ?? shown) + 1;
+      await save();
+    }
     const moved = request.status !== thread.status;
-    if (moved && ANNOUNCED[request.status]) {
-      const spec = latestSpecification(request);
-      await post(
-        thread,
-        `*${ANNOUNCED[request.status]}*${
-          request.status === "agreed" && spec
-            ? ` (version ${spec.version})`
-            : ""
-        }`,
-      );
-    }
     next.status = request.status;
-    if (JSON.stringify(next) !== JSON.stringify(thread)) {
-      await threads.save(next);
-    }
+    if (JSON.stringify(next) !== JSON.stringify(thread)) await save();
     // Changes made outside Slack that are discussion points.
     if (routerFailed) await standIn(request.id, "router_test");
     else if (
@@ -493,8 +507,9 @@ export function createApp(deps: AppDeps, config: AppConfig) {
     const [action] = payload.actions as { action_id: string; value: string }[];
     const name = action.action_id.replace(/^capture:/, "");
     const person = await whoIs(user);
+    const [requestId, extra] = action.value.split("|");
     if (name === "resolveQuestion") {
-      const [requestId, questionId] = action.value.split("|");
+      const questionId = extra;
       await act(person, "resolve_question", { questionId }, requestId, {
         standIn: true,
       });
@@ -505,7 +520,7 @@ export function createApp(deps: AppDeps, config: AppConfig) {
         "Marked answered.",
       );
     }
-    const stored = await find(action.value);
+    const stored = await find(requestId);
     const { request } = stored;
     if (name === "actions") return showActions(user, stored, person);
     if (NEEDS_INPUT.has(name)) {
@@ -536,7 +551,7 @@ export function createApp(deps: AppDeps, config: AppConfig) {
           [
             input(
               "result",
-              "The build-result file: an https URL, a path in the Capture repository, or its JSON",
+              "The build result: its https URL, or its JSON",
             ),
           ],
           "Record",
@@ -568,9 +583,7 @@ export function createApp(deps: AppDeps, config: AppConfig) {
     await act(
       person,
       method[name],
-      name === "agree"
-        ? { version: latestSpecification(request)?.version ?? 0 }
-        : {},
+      name === "agree" ? { version: Number(extra) || 0 } : {},
       request.id,
       // Agreeing, joining and proposing need no agent; submitting starts the talk.
       name === "submit"
@@ -648,10 +661,26 @@ export function createApp(deps: AppDeps, config: AppConfig) {
     } else if (name === "withdraw") {
       await act(person, "withdraw", { reason: value("reason") }, requestId);
     } else if (name === "recordBuildResult") {
-      await capture("record_build_result", {
-        as: person.email,
-        result: value("result").trim(),
-      });
+      // From chat, never a path on this machine.
+      const result = value("result").trim();
+      if (result.startsWith("{")) {
+        let url = "";
+        try {
+          url = String(JSON.parse(result)?.source?.url ?? "");
+        } catch {
+          throw new CaptureRefusal("That build result isn't valid JSON.");
+        }
+        if (!url.endsWith(`/requests/${requestId}`)) {
+          throw new CaptureRefusal(
+            "That build result is for another request; record it from that request's thread.",
+          );
+        }
+      } else if (!result.startsWith("https://")) {
+        throw new CaptureRefusal(
+          "Give the build result as its https URL or its JSON.",
+        );
+      }
+      await capture("record_build_result", { as: person.email, result });
       await syncAll();
     } else if (name === "editSpecification") {
       const fields = Object.fromEntries(
@@ -718,9 +747,15 @@ export function createApp(deps: AppDeps, config: AppConfig) {
 
   /** Says a refusal to the person it is for, in Capture's words. */
   async function refuse(user: string | undefined, e: unknown) {
-    if (!(e instanceof CaptureRefusal)) throw e;
-    log("Refused: {message}", { message: e.message });
-    if (user) await tell(user, e.message);
+    const refused = e instanceof CaptureRefusal;
+    log(refused ? "Refused: {message}" : "Failed: {message}", {
+      message: String((e as Error)?.message ?? e),
+    });
+    if (!user) return;
+    await tell(
+      user,
+      refused ? (e as Error).message : "That didn't work; please try again.",
+    ).catch(() => {});
   }
 
   return {
@@ -749,6 +784,10 @@ export function createApp(deps: AppDeps, config: AppConfig) {
       });
     },
     /** Posts threads and what changed in Capture since the last look. */
-    poll: () => serial(syncAll),
+    poll(): Promise<void> {
+      if (polling) return Promise.resolve();
+      polling = true;
+      return serial(syncAll).finally(() => (polling = false));
+    },
   };
 }

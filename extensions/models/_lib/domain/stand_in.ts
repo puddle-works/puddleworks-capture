@@ -333,7 +333,7 @@ const bullets = (items: string[]) =>
 
 const ROLE_BRIEF: Record<StandInRole, string> = {
   builder:
-    `You take the builder's part. Ask about the current process wherever the request leaves it unclear. Draft the recipe: the phrases someone will ask (the requested phrase stays first, as asked), what each answer shows, what to answer when there is nothing to show (whenEmpty), and any pieces taken from the phrase. Say whether the outcome only reads or what it changes (effects). Answer the requester's questions. When the specification is ready and no question is open, propose it. If an agreed specification has to change, revise it and give the reason.
+    `You take the builder's part. Ask about the current process wherever the request leaves it unclear. Draft the recipe: the phrases someone will ask (the requested phrase stays first, as asked), what each answer shows, what to answer when there is nothing to show (whenEmpty), and any pieces taken from the phrase. Say whether the outcome only reads or what it changes (effects). Answer the requester's questions. When the specification is ready and no question is open, propose it.
 
 Return the whole specification in "specification" whenever you change it. It says what, not how: no data shapes, libraries or file names.`,
   requester:

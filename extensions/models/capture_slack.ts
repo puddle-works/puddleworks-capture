@@ -80,6 +80,7 @@ const ThreadSchema = z.object({
   status: z.string(),
   routerTests: z.number().int(),
   shownMessages: z.number().int(),
+  shownTransitions: z.number().int().optional(),
 });
 
 interface SlackContext {
@@ -100,6 +101,10 @@ async function swampJson(
   ctx: SlackContext,
   args: string[],
 ): Promise<{ ok: boolean; out: Record<string, unknown> }> {
+  // Each Capture step is its own swamp run, so Capture's rules and lock apply
+  // as they do from the command line. The arguments are a fixed method name
+  // and one JSON input read as data (--literal-inputs), with no shell.
+  // swamp-quality-ignore deno-command
   const output = await new Deno.Command(ctx.globalArgs.swampPath, {
     args: [...args, "--json"],
     cwd: ctx.repoDir,
@@ -139,7 +144,7 @@ export function captureRunner(ctx: SlackContext): CaptureRun {
 /** The behavior type: Capture in Slack. */
 export const model = {
   type: "@puddleworks/capture/slack",
-  version: "2026.11.16.1",
+  version: "2026.11.24.1",
   globalArguments: GlobalArgsSchema,
   upgrades: [],
   resources: {
