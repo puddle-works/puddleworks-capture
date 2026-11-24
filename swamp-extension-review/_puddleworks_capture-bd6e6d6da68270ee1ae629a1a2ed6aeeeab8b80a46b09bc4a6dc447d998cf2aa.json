@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.24.1",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-24T12:30:00Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "New @puddleworks/capture/slack takes botToken and appToken as sensitive global arguments, meant as vault expressions (README); they are sent only in the Authorization header, SlackError carries only method and Slack's error code, and neither token reaches subprocesses, logs or stored data. swamp doctor secrets is clean on a definition made as the README shows."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "The Slack app logs refusals and failures with context; stand_in_prompt and record_stand_in_turn log what they wrote, like the other methods."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "Capture's refusals reach the Slack user in Capture's words; any other failure is logged and the user is told it didn't work. Stand-in drafts or proposals the rules refuse become a comment instead of being lost; anything a stand-in isn't allowed is refused outright."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "70 tests pass (308 steps). New: stand-in rules per phase, every deciding step refused from a stand-in, the Slack app against a fake Slack and the real Capture methods (identity by email, refusals, one thread, replies recorded, buttons per role, status and failed-router-test posts, a stale Agree refused, build results from paths refused), and serve's Socket Mode connect and stop. Round 1 of review found two blockers (stale Agree, local file reads from Record build); both were fixed with regression tests and round 2 passed."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "The thread record is saved after each post, so a sync that fails partway doesn't post twice; announcements come from transitions, so two status changes in one poll are both posted. Known gap: a restart between a Slack reply and its sync can echo that reply once."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "Each Slack step runs the real Capture method with as set to the person whose Slack email is on the people list; nothing in a payload can change it. Agree carries the version shown. Record build from Slack accepts only JSON for this request or an https URL."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "A poll is skipped while one is pending, so work can't pile up. Stand-in turns run one per request at a time."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "The Slack app manifest the README links is in additionalFiles. The README says the channel must be private, as Slack shows every request in it to all its members."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "StandInTurnSchema allows only comment and question messages, a spec, propose and a revision reason; discussion points are an enum. ThreadSchema's shownTransitions is optional."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "thread (one per request, gc 5) and standInPrompt (one per request, gc 10) are infinite, like the other resources."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "pass",
+      "note": "standIn is set with add_person and kept by update_person. A stand-in can't own a request, be invited or join on its own."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "stand_in_prompt and record_stand_in_turn check the rule (one person holds both roles, the request is open, the role matches the phase) before anything is written; Slack build results are checked before Capture is called. serve doesn't yet check the agent emails at start; a wrong one fails each turn and is logged."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "thread-<requestId> and stand-in-prompt-<requestId> are stable, one per request."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "The Slack app reads with queryData and writes only through swamp behavior run of Capture's methods (--literal-inputs, argument array, no shell), so Capture's rules and lock apply."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "requests and web move to 2026.11.24.1 with no-op upgrade entries; settings are unchanged. Person.standIn is optional, so stored people read as before. The new slack type starts at 2026.11.24.1."
+    }
+  ]
+}

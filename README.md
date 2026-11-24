@@ -382,13 +382,26 @@ swamp vault put capture-slack bot-token   # prompts; paste the xoxb- token
 swamp vault put capture-slack app-token   # prompts; paste the xapp- token
 swamp behavior create @puddleworks/capture/slack slack \
   --global-arg channel=C0123ABCD \
-  --global-arg "botToken=\${{ vault.get('capture-slack', 'bot-token') }}" \
-  --global-arg "appToken=\${{ vault.get('capture-slack', 'app-token') }}"
+  --global-arg 'botToken=${{ vault.get("capture-slack", "bot-token") }}' \
+  --global-arg 'appToken=${{ vault.get("capture-slack", "app-token") }}'
 swamp behavior run slack serve   # until stopped; run it as a service
 ```
 
+Everyone in the channel reads every submitted request and its discussion, so
+make it a private channel holding only Capture's builders and the people who
+raise requests. Capture's sharing rules (a builder may read any submitted
+request) still decide every step, but Slack shows the channel to all its
+members.
+
 Each thread's place is kept as `thread-<requestId>` data, so a restart picks up
 where it left off.
+
+`serve` runs one process for each Capture step and each stand-in turn:
+`swamp behavior run <requests> <method> --input <JSON> --literal-inputs --json`,
+or `swamp workflow run @puddleworks/capture-stand-in`, in the repository. The
+method names are fixed in the app, the input is one JSON argument read as data
+(never evaluated), and no shell is involved. `swampPath` names the swamp command
+if it isn't on `PATH`.
 
 ### Stand-in agents
 

@@ -211,7 +211,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.16.1",
+  version: "2026.11.24.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -303,6 +303,12 @@ export const model = {
       toVersion: "2026.11.16.1",
       description:
         "Text arguments that aren't JSON, and an import file that isn't JSON, are refused without quoting them; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.24.1",
+      description:
+        "Stand-in agents: add_person standIn, stand_in_prompt and record_stand_in_turn, and every deciding step refused from a stand-in; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

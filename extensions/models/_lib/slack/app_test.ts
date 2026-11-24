@@ -269,7 +269,7 @@ describe("Capture in Slack", () => {
       "Agree",
       "Withdraw",
     ]);
-    await t.press("U_OLIVE", "agree", id);
+    await t.press("U_OLIVE", "agree", `${id}|1`);
     expect(t.threadPosts()).toContain("*Agreed* (version 1)");
     await t.press("U_BEA", "actions", id);
     expect(t.buttons("U_BEA")).toEqual(["Record build"]);
@@ -395,8 +395,57 @@ describe("Capture in Slack", () => {
       "Agree",
       "Withdraw",
     ]);
-    await t.press("U_SOL", "agree", id);
+    await t.press("U_SOL", "agree", `${id}|1`);
     await t.reply("U_SOL", thread, "Starting on it now.");
     expect(t.standIns.at(-1)?.as).toBe("requester-agent@example.com");
+  });
+  it("agrees only to the version the Agree button showed", async () => {
+    const t = setup();
+    await t.add({ email: "olive@example.com", name: "Olive Owner" });
+    await t.add({ email: "bea@example.com", name: "Bea", builder: "true" });
+    const { id } = await raised(t, "U_OLIVE");
+    const ctx = t.swamp.context(model.globalArguments.parse({}));
+    const run = async (method: string, input: Record<string, unknown>) => {
+      const m = model.methods[method as keyof typeof model.methods];
+      // deno-lint-ignore no-explicit-any
+      await (m.execute as any)(m.arguments.parse(input), ctx);
+    };
+    await t.press("U_BEA", "join", id);
+    await run("edit_specification", {
+      as: "bea@example.com",
+      id,
+      specification: goodSpec,
+    });
+    await run("propose", { as: "bea@example.com", id });
+    await t.press("U_OLIVE", "actions", id);
+    // Sent back and proposed again as version 2 while the button is on screen.
+    await run("request_changes", { as: "bea@example.com", id, note: "x" });
+    await run("edit_specification", {
+      as: "bea@example.com",
+      id,
+      specification: { ...goodSpec, constraints: ["Two stockrooms"] },
+    });
+    await run("propose", { as: "bea@example.com", id });
+    await t.press("U_OLIVE", "agree", `${id}|1`);
+    const [stored] = await t.read.requests();
+    expect(stored.request.status).toBe("ready_for_agreement");
+    expect(t.lastSaid("U_OLIVE")).toContain("Version 1");
+  });
+
+  it("records a build only from JSON or an https URL, for the thread's request", async () => {
+    const t = setup();
+    await t.add({ email: "olive@example.com", name: "Olive Owner" });
+    await t.add({ email: "bea@example.com", name: "Bea", builder: "true" });
+    const { id } = await raised(t, "U_OLIVE");
+    const before = t.ran.length;
+    for (const result of ["/etc/passwd", "../secrets.json"]) {
+      await t.send("U_BEA", "recordBuildResult", { result }, { requestId: id });
+      expect(t.lastSaid("U_BEA")).toContain("https URL or its JSON");
+    }
+    await t.send("U_BEA", "recordBuildResult", {
+      result: JSON.stringify({ source: { url: "http://x/requests/other" } }),
+    }, { requestId: id });
+    expect(t.lastSaid("U_BEA")).toContain("another request");
+    expect(t.ran.length).toBe(before);
   });
 });

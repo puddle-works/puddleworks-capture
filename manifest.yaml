@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.11.16.1"
+version: "2026.11.24.1"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
@@ -62,4 +62,5 @@ workflows:
   - workflow-capture-stand-in.yaml
 additionalFiles:
   - README.md
+  - docs/slack/capture-app-manifest.yaml
   - LICENSE
