@@ -3,6 +3,19 @@
 // from any https site, so the app's own page policy and source must not.
 import { assert, assertEquals } from "@std/assert";
 import { dirname, join } from "@std/path";
+import {
+  agreedRequest,
+  owner,
+  stranger,
+  T2,
+} from "../extensions/models/_lib/domain/test_fixtures.ts";
+import {
+  recentChanges,
+  stepCommand,
+  STEPS,
+  stepsFor,
+} from "../extensions/apps/capture/src/steps.ts";
+import { model as requestsModel } from "../extensions/models/capture.ts";
 
 const app = join(import.meta.dirname!, "../extensions/apps/capture");
 const read = (path: string) =>
@@ -77,4 +90,73 @@ Deno.test("the built app calls no site and navigates nowhere", () => {
     return; // Not built here; swamp app build makes dist/ before a push.
   }
   assertEquals(built.filter((file) => egress.test(read(file))), []);
+});
+
+// What Slack announces, shown in the app as Recent changes, and each person's
+// steps as Capture's rules give them.
+Deno.test("recent changes are announced moves and failed router tests", () => {
+  const request = agreedRequest();
+  request.transitions.push(
+    // Not a move, so not announced.
+    { ...request.transitions.at(-1)!, from: "agreed", to: "agreed" },
+  );
+  request.routerTests = [{
+    version: "2026.10.23.1",
+    results: [
+      { phrase: "what needs counting", outcome: "not-answered", note: null },
+    ],
+    recordedBy: owner.userId,
+    recordedAt: "2026-10-23T12:00:00.000Z",
+  }];
+  const stored = {
+    request,
+    version: 1,
+    idempotencyKeys: [],
+    before: null,
+    legacy: null,
+    number: 7,
+  };
+  assertEquals(
+    recentChanges([stored]).map((c) => [c.at, c.text]),
+    [
+      [
+        "2026-10-23T12:00:00.000Z",
+        "Router test of 2026.10.23.1 failed: “what needs counting” wasn't answered",
+      ],
+      [T2, "Agreed (version 1)"],
+    ],
+  );
+  assertEquals(
+    stepCommand("capture", stored, owner, "export"),
+    `swamp behavior run capture export_outcome_spec --input id=7 --input as=${owner.email}`,
+  );
+  assert(stepsFor(stored, owner).includes("export"));
+  assertEquals(stepsFor(stored, stranger), []);
+});
+
+Deno.test("each step names a method of the requests behavior", () => {
+  const methods = Object.keys(requestsModel.methods);
+  const missing = Object.values(STEPS).map(([, method]) => method)
+    .filter((m) => !methods.includes(m));
+  assertEquals(missing, []);
+});
+
+Deno.test("a step's command quotes an email the shell would break on", () => {
+  const stored = {
+    request: agreedRequest(),
+    version: 1,
+    idempotencyKeys: [],
+    before: null,
+    legacy: null,
+    number: 7,
+  };
+  assertEquals(
+    stepCommand(
+      "capture",
+      stored,
+      { ...owner, email: "o'brien@example.com" },
+      "export",
+    ),
+    `swamp behavior run capture export_outcome_spec --input id=7 --input 'as=o'\\''brien@example.com'`,
+  );
 });

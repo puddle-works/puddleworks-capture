@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.25.1",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-25T06:16:14Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "No secrets. The app's new Viewing as picker, steps and recent changes stay in the sandbox; the egress tests still pass over the new code."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "na",
+      "note": "No behavior's logging changed; the app's new code is rendering only."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "The new code is pure rendering from data already read; read and refresh errors are handled as in 2026.11.24.2."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "77 tests pass. Round 1 found the step-to-method table untested; a test now checks every step names a method of the requests behavior (fails on a rename), and others cover which status changes count, the command format and shell quoting. Checked by hand in the local dashboard: Viewing as, Waiting on you, Your steps with commands, and Recent changes updating live."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "Nothing is written; the panel re-renders from the chosen person and the data. Round 1 found a re-render replaced the picker and dropped its focus; focus now returns to it."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "Each step's command names the right method and inputs, checked against swamp behavior type describe; steps with more required inputs end in an ellipsis. Round 1 found an email with an apostrophe broke the shown command; values the shell would split are now quoted."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "No new listeners, timers or subscriptions."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Round 1 found Waiting on you listed nearly every request a person is on, including released ones, against the README; it now counts only steps the request waits on (submit, propose, agree, start building, and build and router-test steps before release). Router-test failures now carry their notes, as the Slack app posts them. The README says the picker is only for showing steps and anyone can pick anyone."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "na",
+      "note": "No schemas changed."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "na",
+      "note": "No data is written; the chosen person lasts until the app reloads."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "na",
+      "note": "The app stays read-only (capabilities [data:read], run [], methods []); steps are shown as commands, not run."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "na",
+      "note": "No operations run."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "No data names changed; the behavior named in commands is the one the app opened, checked by the reader's name pattern."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "Still only data:read. Steps come from allowedActions, which gives nothing on a request the person can't read; Recent changes shows only Agreed, Building, Released and router tests, which no draft has, and nothing the page doesn't already show everyone. The served page is unchanged: renderPage passes no aside. The reader's new records() reuses data already queried, people sorted by name."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "requests, web and slack move to 2026.11.25.1 with no-op upgrade entries; settings are unchanged."
+    }
+  ]
+}
