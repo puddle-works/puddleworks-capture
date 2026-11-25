@@ -4,11 +4,13 @@
 // changes. It changes nothing and calls no site: every change goes through
 // the requests behavior's methods.
 import { connectApp, followDataChanges } from "@swamp-club/app-sdk";
-import { render } from "preact";
+import { h, render } from "preact";
 import type { PageData } from "../../../models/_lib/web/page/view.ts";
 import { pageView } from "../../../models/_lib/web/page/view.ts";
 import "../../../../web/src/web.css";
+import "./app.css";
 import { openCapture, REQUESTS_TYPE } from "./capture_data.ts";
+import { StepsPanel } from "./steps.ts";
 
 const root = document.getElementById("root")!;
 
@@ -49,6 +51,9 @@ async function main() {
   let path = "/";
   let shown: string | null = null;
   let show = () => {};
+  // Who the person viewing says they are: for their steps only. The sandbox
+  // keeps no storage, so it lasts until the app reloads.
+  let viewerEmail = "";
   let changed = () => {};
   // Under swamp serve the dashboard connects to serve after the app opens,
   // and refuses a request sent while it isn't connected, so reads wait.
@@ -101,7 +106,26 @@ async function main() {
           ? source.request(parts[1])
           : undefined,
       };
-    const { title, page } = pageView(data);
+    const { requests, people } = source.records();
+    const current = data.page === "request" && data.request
+      ? requests.find((s) => s.request.id === data.request!.id) ?? null
+      : null;
+    const showPanel = data.page === "list" || current !== null;
+    const { title, page } = pageView(
+      data,
+      showPanel &&
+        h(StepsPanel, {
+          behavior,
+          requests,
+          people,
+          current,
+          viewer: people.find((p) => p.email === viewerEmail) ?? null,
+          onViewer: (email: string) => {
+            viewerEmail = email;
+            show();
+          },
+        }),
+    );
     // A re-read keeps what was open on the same page.
     const same = shown === path;
     const wasOpen = same
@@ -114,9 +138,12 @@ async function main() {
         (d as HTMLDetailsElement).open
       )
       : [];
+    // Re-rendering replaces the picker, so focus goes back to it.
+    const picking = document.activeElement?.matches(".view-as select");
     render(null, root);
     root.replaceChildren();
     render(page, root);
+    if (picking) root.querySelector<HTMLElement>(".view-as select")?.focus();
     document.title = `${title} — Capture`;
     for (const id of wasOpen) {
       const button = root.querySelector<HTMLButtonElement>(

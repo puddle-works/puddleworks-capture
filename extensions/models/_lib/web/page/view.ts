@@ -21,9 +21,9 @@ export type PageData = {
 /**
  * The page for a path's data, its title and status. The serve method renders
  * it to HTML; the Capture app (extensions/apps/capture) renders it in the
- * dashboard.
+ * dashboard, and passes aside, which goes at the top of main.
  */
-export function pageView(data: PageData): {
+export function pageView(data: PageData, aside?: ComponentChildren): {
   title: string;
   status: number;
   page: VNode;
@@ -42,7 +42,7 @@ export function pageView(data: PageData): {
     status = 404;
     body = h(Missing, null);
   }
-  return { title, status, page: h(Layout, null, body) };
+  return { title, status, page: h(Layout, null, aside, body) };
 }
 
 function Layout({ children }: {

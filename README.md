@@ -91,7 +91,15 @@ It only reads. It asks for `data:read` and nothing else: no workflows to run and
 no methods. It reads the people list and requests of one requests behavior with
 `data.query`, and reads them again when `data.subscribe` says they changed. It
 picks the behavior when it opens: the one named `capture`, or else the first by
-name that has people; reload the app after adding the first person. As on the
+name that has people; reload the app after adding the first person.
+
+As in the Slack app, it shows each person their steps and the status changes.
+Choose who you are under **Viewing as**: the list then shows the requests
+waiting on you, and a request shows each step Capture's rules would let you
+take, with the `swamp behavior run` command that takes it. The choice is only
+for showing steps, and it lasts until the app reloads; anyone can pick anyone,
+as with `as`. **Recent changes** on the list shows the latest Agreed, Building
+and Released, and failed router tests, as the Slack app posts them. As on the
 served page, everyone who can open it sees every request and everyone's email.
 
 **It sends nothing to any site.** Capture holds people's emails, so the app

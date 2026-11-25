@@ -1,7 +1,12 @@
 // The viewer's copy of Capture's data. It reads one requests behavior's data
 // with swamp's data query and keeps the latest, so each page load answers
 // from memory and the poll only says whether anything changed.
-import { fromResource, recordObject } from "../capture/swamp_store.ts";
+import {
+  fromResource,
+  recordObject,
+  toPerson,
+} from "../capture/swamp_store.ts";
+import type { Person } from "../domain/model.ts";
 import type { Stored } from "../capture/ports.ts";
 import { toWebRequest, toWebSummary } from "../capture/views.ts";
 import type {
@@ -45,6 +50,8 @@ export interface CaptureSource {
   overview(): WebOverview;
   /** By id, or by number (12 or #12). */
   request(ref: string): WebRequest | undefined;
+  /** The requests and people as Capture's domain rules take them. */
+  records(): { requests: Stored[]; people: Person[] };
 }
 
 export function captureSource(
@@ -53,6 +60,7 @@ export function captureSource(
 ): CaptureSource {
   let requests = new Map<string, Stored>();
   let people: WebPerson[] = [];
+  let persons: Person[] = [];
   let readAt = new Date(0).toISOString();
   let last: string | null = null;
 
@@ -77,11 +85,14 @@ export function captureSource(
         }
       }
       requests = nextRequests;
-      people = personRecords
+      const personData = personRecords
         .map((r) => recordObject(r as never))
         .filter((d): d is Record<string, unknown> =>
           d !== null && typeof d.email === "string"
-        )
+        );
+      persons = personData.map(toPerson)
+        .sort((a, b) => a.name.localeCompare(b.name));
+      people = personData
         .map((d) => ({
           name: String(d.name),
           email: String(d.email),
@@ -99,6 +110,10 @@ export function captureSource(
           b.updatedAt.localeCompare(a.updatedAt) || b.id.localeCompare(a.id)
         );
       return { requests: summaries, people, readAt };
+    },
+
+    records() {
+      return { requests: [...requests.values()], people: persons };
     },
 
     request(ref) {

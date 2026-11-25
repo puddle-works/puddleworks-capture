@@ -211,7 +211,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.24.2",
+  version: "2026.11.25.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -315,6 +315,12 @@ export const model = {
       toVersion: "2026.11.24.2",
       description:
         "zod 4.6.7, past advisory GHSA-mrhx-c7xc-m3w5; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.25.1",
+      description:
+        "Released with the app's steps and recent changes; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
