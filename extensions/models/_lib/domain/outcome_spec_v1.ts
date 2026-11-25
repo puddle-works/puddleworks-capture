@@ -1,4 +1,4 @@
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { openQuestions } from "./discussion.ts";
 import { DomainError } from "./errors.ts";
 import { type Request, ROLES, SpecificationContentSchema } from "./model.ts";

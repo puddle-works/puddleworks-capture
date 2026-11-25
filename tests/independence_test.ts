@@ -8,7 +8,11 @@ const root = join(import.meta.dirname!, "..");
 function files(dir: string): string[] {
   const found: string[] = [];
   for (const entry of Deno.readDirSync(dir)) {
-    if (entry.name === "dist") continue;
+    // Builds, and the app's packages and the copy of swamp's platform that
+    // swamp app init, dev and build write; none of them is Capture's code.
+    if (["dist", "node_modules", ".swamp-platform"].includes(entry.name)) {
+      continue;
+    }
     const path = join(dir, entry.name);
     if (entry.isDirectory) found.push(...files(path));
     else found.push(path);

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <!--
+      Capture holds people's emails, so the app sends nothing anywhere. The
+      dashboard's own policy lets an app fetch from and load images off any
+      https site; this one, which applies as well, allows neither. It talks
+      to swamp only over the dashboard's message port.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="connect-src 'none'; img-src data:; media-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'"
+    />
+    <title>Capture</title>
+  </head>
+  <body>
+    <div id="root">
+      <p class="empty">Connecting…</p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

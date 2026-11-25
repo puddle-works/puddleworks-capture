@@ -3,7 +3,7 @@
 // request is still discussed by two sides. Which role the person plays is one
 // rule, personPlays. The agents talk, draft and propose; every decision stays
 // with the person, which permissions.ts enforces for any stand-in.
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { currentBuild, routerTestFor } from "./build.ts";
 import { openQuestions, postMessage } from "./discussion.ts";
 import { DomainError } from "./errors.ts";

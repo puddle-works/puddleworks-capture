@@ -20,7 +20,7 @@
  *
  * @module
  */
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import { type DiscussionPoint, type Person } from "./_lib/domain/index.ts";
 import type { Stored } from "./_lib/capture/ports.ts";
 import {
@@ -144,9 +144,16 @@ export function captureRunner(ctx: SlackContext): CaptureRun {
 /** The behavior type: Capture in Slack. */
 export const model = {
   type: "@puddleworks/capture/slack",
-  version: "2026.11.24.1",
+  version: "2026.11.24.2",
   globalArguments: GlobalArgsSchema,
-  upgrades: [],
+  upgrades: [
+    {
+      toVersion: "2026.11.24.2",
+      description:
+        "zod 4.6.7, past advisory GHSA-mrhx-c7xc-m3w5; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+  ],
   resources: {
     thread: {
       description:

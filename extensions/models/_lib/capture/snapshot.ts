@@ -1,7 +1,7 @@
 // capture-snapshot/v1: everything Capture holds, as one JSON file. The
 // export_snapshot method writes it, as Capture's old Node app did, and the
 // import method brings it into swamp data, in this repository or another.
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import type { Person } from "../domain/index.ts";
 import type { Stored } from "./ports.ts";
 

@@ -1,4 +1,4 @@
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 import type { BuildResult, BuildResultV1 } from "./build_result.ts";
 
 export const REQUEST_STATUSES = [

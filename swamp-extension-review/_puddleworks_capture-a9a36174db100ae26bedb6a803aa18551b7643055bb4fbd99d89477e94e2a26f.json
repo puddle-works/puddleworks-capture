@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.24.2",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-24T18:50:33Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "The new app holds no secrets: it reads as the person viewing it, through the dashboard's message port. No behavior's credential handling changed."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "No behavior's logging changed. The app logs nothing; a read it can't make shows the refusal on the page and says it is trying again."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "Round 1 found that a dropped connection or mid-write data during the app's first read left the page on the error for good. Fixed: it shows the error, waits for the connection and tries again; checked under swamp serve by revoking and restoring the viewer's data grant, and by restarting serve with the app open. A later refresh that fails is retried on the next change, as the served page does."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "74 tests pass. tests/app_test.ts checks the app asks only for data:read, its page policy (connect-src 'none', img-src data:), and that neither its code, the shared page and domain code it bundles, nor a built dist calls a site or navigates (fetch, sockets, beacons, images, window.open, location). Round 1 found the first version scanned only src and missed navigation; injecting window.open into page/view.ts or location.href into main.ts now fails it. Tested by hand: swamp app build, the local dashboard, and swamp serve with approval, viewer grants and refusal. CI doesn't build or typecheck the app; bun run check and swamp app build run before a push."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "The app reads again after the dashboard reconnects to serve, and one read runs at a time. Known gap: an item rewritten while a query is paging past 500 records can be listed twice until the next read."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "data.query (sorted, paged by nextCursor), data.subscribe through followDataChanges, and the bridge's connection, path and navigate messages are used as the app SDK copy defines them. Requests wait for the host's connected, which serve's dashboard needs."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "One change subscription for the app's life, polling every 3 s only where serve has no change feed; refreshes don't overlap."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Round 1 found the manifest's new Apps heading took in the Slack behavior's bullet; moved below it. The README says the app sends nothing to any site, the grants a viewer needs under serve, and how the app picks a requests behavior. Examples use example.com people. The archive ships app.yaml, dist, package.json and bun.lock, not node_modules or sources."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "No schema changed. The app reads records through the existing recordObject and fromResource; build URLs stay https-only when written, and the app opens only https links."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "na",
+      "note": "No resource spec changed, and the app writes no data."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "na",
+      "note": "The app is read-only by design (capabilities [data:read], run [], methods []); every change still goes through the requests behavior's methods."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "The app waits for the dashboard's connection to serve before reading; the SDK refuses a bridge version it doesn't speak."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "No data names changed. The app shows the requests behavior named capture, or else the first by name with people, chosen when it opens; round 1 found the README said 'the only one there is', now corrected."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "The app reads only with data:read; under serve it reads as the viewer, and read on data:capture plus read on the app is enough. Its page policy closes the https connect and image loads swamp allows apps, checked in the browser by blocked fetch and image requests. The layout.ts and view.ts split moves code without changing the server's page."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "requests, web and slack move to 2026.11.24.2 with no-op upgrade entries, as settings are unchanged; an existing capture instance upgraded on its next run. zod is 4.6.7 everywhere (GHSA-mrhx-c7xc-m3w5) and deno.lock holds only 4.6.7. The repo pins swamp 20261124.144210.0, which has apps support."
+    }
+  ]
+}

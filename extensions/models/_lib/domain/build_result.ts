@@ -1,4 +1,4 @@
-import { z } from "npm:zod@4.6.5";
+import { z } from "npm:zod@4.6.7";
 
 /**
  * puddleworks.dev/build-result/v1 and /v2: what a build produced, and where
