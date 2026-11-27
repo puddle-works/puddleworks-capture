@@ -18,6 +18,8 @@
  * - `person`: someone in the people list (`person-<userId>`).
  * - `signedIn`: who a swamp serve login is, for the Capture app
  *   (`signed-in-<nonce>`), kept a day.
+ * - `standInNext`: whether a stand-in's turn follows a step taken in the
+ *   Capture app (`stand-in-next-<id>`), kept a day.
  * - `view`: one request as the person asking sees it (`view-<id>`).
  * - `requestList`: the requests in one scope and status (`requests-<scope>-<status>`).
  * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
@@ -36,6 +38,7 @@ import {
   DISCUSSION_POINTS,
   DomainError,
   EXPORT_FORMATS,
+  possibleDuplicates,
   PRINCIPAL_PATTERN,
   releaseProblems,
   REQUEST_STATUSES,
@@ -52,6 +55,7 @@ import {
   APP_STEPS,
   appStepCall,
   type AppStepInput,
+  STAND_IN_AFTER,
 } from "./_lib/capture/app_steps.ts";
 import { readJsonInput } from "./_lib/capture/build_result_input.ts";
 import type { Stored } from "./_lib/capture/ports.ts";
@@ -65,6 +69,9 @@ export const GlobalArgsSchema = z.object({
   ),
   defaultAs: z.email().optional().describe(
     "Who acts when a method's `as` is left out, such as the account a workflow logs requests for.",
+  ),
+  standInAgent: z.string().trim().max(200).default("").describe(
+    "The agent behavior stand-ins answer with after a step taken in the Capture app, such as a @mgreten/cli-agent behavior. Blank: the app brings in no stand-in.",
   ),
 });
 /** The settings, as the methods see them. */
@@ -241,7 +248,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.27.1",
+  version: "2026.11.27.2",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -359,6 +366,12 @@ export const model = {
         "Swamp serve logins on the people list (principal), carried by snapshots, and app_step, which the Capture app runs as the signed-in person; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.27.2",
+      description:
+        "standInAgent, so a stand-in agent takes its turn after a step taken in the Capture app; set values are kept and it defaults to blank",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     request: {
@@ -403,6 +416,19 @@ export const model = {
       }),
       lifetime: "1d",
       garbageCollection: 1,
+    },
+    standInNext: {
+      description:
+        "Whether a stand-in agent takes its turn after a step taken in the Capture app, and who and on what, as app_stand_in found it (stand-in-next-<id>).",
+      schema: z.object({
+        due: z.boolean(),
+        id: z.string(),
+        agent: z.string(),
+        standInAs: z.string(),
+        point: z.string(),
+      }),
+      lifetime: "1d",
+      garbageCollection: 5,
     },
     view: {
       description:
@@ -1282,6 +1308,63 @@ export const model = {
         });
         return await runMethod(method, input, context);
       },
+    },
+
+    app_stand_in: {
+      description:
+        "After a step taken in the Capture app, say whether a stand-in agent takes its turn, as the Slack app would bring one in: on an open request one person holds both roles of, after a reply, submitting, asking for changes, editing the spec or resolving a question, with standInAgent set and a stand-in for the role in the people list. Writes stand-in-next-<id>; the @puddleworks/capture-app-step workflow then runs @puddleworks/capture-stand-in when it is due. principal must be someone in the people list.",
+      arguments: z.object({
+        principal: z.string().max(300).describe(
+          "The swamp serve login that took the step. The workflow passes run.initiatedBy.",
+        ),
+        step: z.enum(APP_STEPS).describe("The step just taken."),
+        id: z.string().max(100).default("").describe("The request's id."),
+      }),
+      execute: (
+        args: { principal: string; step: AppStepInput["step"]; id: string },
+        context: CaptureContext,
+      ): Output =>
+        run(context, async (services, store) => {
+          const person = await services.signedIn(args.principal);
+          const agent = context.globalArgs.standInAgent;
+          const after = STAND_IN_AFTER[args.step];
+          let next = null;
+          if (agent && args.id && after !== undefined) {
+            let point = after ?? undefined;
+            if (args.step === "submit") {
+              const stored = await services.get(person.email, args.id);
+              const all = await store.allRequests();
+              if (possibleDuplicates(stored.request, all).length > 0) {
+                point = "duplicates";
+              }
+            }
+            next = await services.standInAfter(person, args.id, point);
+          }
+          const id = next?.stored.request.id ?? args.id;
+          store.add(
+            await context.writeResource(
+              "standInNext",
+              `stand-in-next-${id || "none"}`,
+              {
+                due: next !== null,
+                id,
+                agent: next ? agent : "",
+                standInAs: next?.standIn.email ?? "",
+                point: next?.point ?? "",
+              },
+            ),
+          );
+          context.logger.info(
+            next
+              ? "{name} takes its turn on request #{number} after {step}"
+              : "No stand-in takes a turn after {step}",
+            {
+              name: next?.standIn.name,
+              number: next?.stored.number,
+              step: args.step,
+            },
+          );
+        }),
     },
 
     export_snapshot: {

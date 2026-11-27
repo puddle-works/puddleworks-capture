@@ -5,11 +5,15 @@ description: >-
   The person is the run's own login (run.initiatedBy), matched to the people
   list by add_person or update_person principal=user:…; no input names
   who acts, and anyone not on the list is refused. The Capture app may run
-  only this workflow. Needs a @puddleworks/capture/requests behavior named
+  only this workflow. When one person holds both roles, a stand-in agent's
+  turn follows, as in the Slack app (app_stand_in decides; set standInAgent
+  on the behavior). Needs a @puddleworks/capture/requests behavior named
   capture.
 version: 1
 tags:
-  maxWallClock: "2m"
+  # As capture-stand-in's: a stand-in's turn after the step can take minutes.
+  # Swamp doesn't stop a run at it; serve's --max-run-duration does.
+  maxWallClock: "30m"
 inputs:
   type: object
   properties:
@@ -103,3 +107,32 @@ jobs:
             currentProcess: ${{ inputs.currentProcess }}
             phrase: ${{ inputs.phrase }}
             idempotencyKey: ${{ inputs.idempotencyKey }}
+      - name: next
+        description: Whether a stand-in agent's turn follows, as in Slack
+        dependsOn:
+          - step: step
+            condition:
+              type: succeeded
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: app_stand_in
+          inputs:
+            principal: ${{ run.initiatedBy }}
+            step: ${{ inputs.step }}
+            id: ${{ inputs.id }}
+      - name: stand_in
+        description: The stand-in agent takes its turn
+        dependsOn:
+          - step: next
+            condition:
+              type: succeeded
+        guard: ${{ !steps.next.outputs.due }}
+        task:
+          type: workflow
+          workflowIdOrName: "@puddleworks/capture-stand-in"
+          inputs:
+            id: ${{ steps.next.outputs.id }}
+            agent: ${{ steps.next.outputs.agent }}
+            standInAs: ${{ steps.next.outputs.standInAs }}
+            point: ${{ steps.next.outputs.point }}

@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.27.2",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-27T16:50:00Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "No secrets. standInAgent names a behavior; the README says an agent that reads a vault needs that vault granted to app users, as a run's vault use is checked against who started it."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "app_stand_in logs which stand-in takes its turn on which request after which step, or that none does; the nested turn logs as capture-stand-in always has."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "A failed or missing decision fails closed: the guard errors or the nested step is skipped, and no turn runs. The app reports the step as taken once it is, even if deciding on a stand-in fails, and reports the step's own refusal otherwise."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "78 tests pass. New ones cover who comes in and on which point after submit and reply, none on a draft, after steps Slack doesn't follow, with no agent, with two people or for an unknown login; and the app's step outcome from run events (done before the turn, the step's refusal, a failed decision, a nested run's events). Round 1 found the event handling untested; it is now a pure module with tests. Checked by hand under swamp serve with a fake 20s agent: the turn ran nested with only run on capture-app-step, and the app said Posted. in 1s."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "A step that fails brings in no turn. As the README now says, nothing stops two quick steps each bringing in a turn, where Slack holds one per request in memory."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "The nested run gets only app_stand_in's outputs: the agent from standInAgent and the stand-in from the people list, never from the app. The child checks the turn again (requireStandInTurn)."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "The app stops following once the step is taken; the run goes on. Round 1 found the maxWallClock comment implied a limit swamp doesn't apply; it now says serve's --max-run-duration bounds the turn, as the README does."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Round 1 found the README silent on how the app differs from Slack; it now says revisions and failed router tests bring in no turn, two turns can overlap, and the first stand-in by email is taken. A misplaced doc comment was fixed and standInNext added to the Output list."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "Round 1 found a whitespace-only standInAgent counted as set; it is now trimmed. app_stand_in's step is the step enum and id is capped."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "standInNext is kept 1d with GC 5; it is read in the same run."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "na",
+      "note": "It writes one decision record per step; nothing to update or delete."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "Before deciding: the login is on the list, the request is readable to them and open, one person holds both roles, an agent is set and a stand-in exists for the role; it runs only after the step succeeded."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "stand-in-next-<request id>, or -none for whoami and raise; a step reads its own run's output, so overlapping runs don't read each other's."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "The request is read through the same visibility check as every step; nothing is written but the decision, and the turn's writes are the stand-in's, through Capture's rules."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "Manifest and all three behavior types at 2026.11.27.2 with identity upgrades; standInAgent defaults to blank, so existing instances keep working and bring in no stand-in."
+    }
+  ]
+}

@@ -144,7 +144,7 @@ export function captureRunner(ctx: SlackContext): CaptureRun {
 /** The behavior type: Capture in Slack. */
 export const model = {
   type: "@puddleworks/capture/slack",
-  version: "2026.11.27.1",
+  version: "2026.11.27.2",
   globalArguments: GlobalArgsSchema,
   upgrades: [
     {
@@ -163,6 +163,12 @@ export const model = {
       toVersion: "2026.11.27.1",
       description:
         "Record build's check is shared with the Capture app; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.27.2",
+      description:
+        "Released with stand-in turns in the Capture app; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

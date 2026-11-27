@@ -14,7 +14,9 @@ import {
   editDetails,
   editSpecification,
   type ExportFormat,
+  heldByOnePerson,
   inviteParticipant,
+  isClosed,
   joinAsBuilder,
   latestSpecification,
   type Message,
@@ -51,6 +53,7 @@ import {
   SpecificationContentSchema,
   standInPrompt,
   type StandInRole,
+  standInRole,
   type StandInTurn,
   startBuilding,
   submit,
@@ -303,6 +306,30 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     },
 
     actor,
+
+    /**
+     * The stand-in agent whose turn follows `person`'s step, as the Slack app
+     * finds it: on an open request one person holds both roles of, the
+     * stand-in for the role the rule gives, by the people list. Null when
+     * none follows. `point` is what the step raised, if anything.
+     */
+    async standInAfter(
+      person: Person,
+      id: string,
+      point?: DiscussionPoint,
+    ): Promise<
+      { stored: Stored; standIn: Person; point?: DiscussionPoint } | null
+    > {
+      const stored = await load(person, id);
+      const { request } = stored;
+      if (request.status === "draft" || isClosed(request)) return null;
+      const people = await store.allPeople();
+      if (!heldByOnePerson(request, people)) return null;
+      const role = standInRole(request.status, point ?? currentPoint(request));
+      const standIn = people.filter((p) => p.standIn === role)
+        .sort((a, b) => a.email.localeCompare(b.email))[0];
+      return standIn ? { stored, standIn, point } : null;
+    },
 
     /**
      * Who is signed in to swamp serve as `principal`, by the people list.
