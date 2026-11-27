@@ -36,6 +36,31 @@ export const STAND_IN_AFTER: Partial<Record<AppStep, DiscussionPoint | null>> =
     resolveQuestion: null,
   };
 
+/**
+ * How long a stand-in's turn holds its request at most. A turn whose run
+ * died never frees it, so after this another may start. Swamp doesn't stop a
+ * run at a time of its own; serve's --max-run-duration of 30 minutes or less
+ * keeps a live turn from outlasting its claim.
+ */
+export const STAND_IN_LOCK_MS = 30 * 60_000;
+
+/** A request's stand-in lock, as saved (stand-in-lock-<id>). */
+export interface StandInLock {
+  held: boolean;
+  claim: string;
+  since: string;
+}
+
+/** Whether a turn holds the request now, so no other may start. */
+export function lockHeld(
+  lock: Partial<StandInLock> | null,
+  now: Date,
+): boolean {
+  if (!lock?.held || !lock.since) return false;
+  const since = Date.parse(lock.since);
+  return Number.isFinite(since) && now.getTime() - since < STAND_IN_LOCK_MS;
+}
+
 /** What the app sends with a step; a workflow passes "" for what it leaves out. */
 export interface AppStepInput {
   step: AppStep;

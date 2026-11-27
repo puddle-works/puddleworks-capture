@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.27.3",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-27T17:35:00Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "No secrets. The lock's claim is a random UUID that only matches a lock to the turn that made it; it is not a secret."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "app_stand_in logs a claimed turn or that one is already running; app_stand_in_done logs who freed the request or that the turn no longer holds it."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "Round 1 found release failing with No such key: next whenever the step failed; release now also depends on next succeeding, so it is skipped then (checked under serve). Round 1 also found release could fail on the login check and leave the request held; it now goes by the claim alone."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "78 tests pass. They cover a held request refusing a second turn, a wrong token freeing nothing, the right one freeing it, a claim lapsing after 30 minutes, and a late release not freeing the turn that took over; a test checks release's dependencies. Mutating lockHeld to never hold fails the test. Under swamp serve with a 20s fake agent: two replies a second apart started one turn; a later reply took one; a turn with a missing agent failed and still freed the request; a failed step skipped release."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "Swamp holds the behavior's lock for each workflow step under serve, and commits before releasing it, so two runs can't both find the request free. A turn longer than 30 minutes could outlast its claim, as swamp doesn't stop runs; the README recommends serve's --max-run-duration of 30 minutes or less."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "pass",
+      "note": "The workflow takes no lock input; the token passes only from next's outputs to release. standInNext.lock defaults to empty."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "One small lock record per request, freed by its turn; one left by a run that never finished lapses after 30 minutes."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Round 1 found the README overstated the guarantee; it now says the lock covers only turns the app brings in, not Slack's or hand-run ones, that an unfinished run holds it until it lapses, and to bound turns with --max-run-duration."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "pass",
+      "note": "standInLock is fully typed; app_stand_in_done's id and lock are bounded strings."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "standInLock is kept 1d with GC 2: one claim and one free per turn; an expired record reads as free."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "pass",
+      "note": "Claimed by app_stand_in, freed by app_stand_in_done, lapsing on its own; no force-free is needed beyond the lapse."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "The claim is made only once a turn is due (signed in, readable, open, one person, agent and stand-in set), and only if no held claim younger than 30 minutes exists. Round 1 found a failure between claim and decision could hold the request; the claim is now written last."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "stand-in-lock-<request id>, as stand-in-next-<id>."
+    },
+    {
+      "id": "data-access",
+      "verdict": "pass",
+      "note": "Reads and writes only its own behavior's lock record inside the locked step."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "Manifest and all three behavior types at 2026.11.27.3 with identity upgrades; no settings changed."
+    }
+  ]
+}

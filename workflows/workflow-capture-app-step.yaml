@@ -136,3 +136,23 @@ jobs:
             agent: ${{ steps.next.outputs.agent }}
             standInAs: ${{ steps.next.outputs.standInAs }}
             point: ${{ steps.next.outputs.point }}
+      - name: release
+        description: Free the request for the next stand-in turn, however this one ended
+        # However the turn ended, but only once next said it was due: a step
+        # that failed leaves next without outputs.
+        dependsOn:
+          - step: next
+            condition:
+              type: succeeded
+          - step: stand_in
+            condition:
+              type: always
+        guard: ${{ !steps.next.outputs.due }}
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: app_stand_in_done
+          inputs:
+            principal: ${{ run.initiatedBy }}
+            id: ${{ steps.next.outputs.id }}
+            lock: ${{ steps.next.outputs.lock }}

@@ -495,7 +495,9 @@ describe("@puddleworks/capture/requests", () => {
         step,
         id,
       });
-      return swamp.data(out.dataHandles[0].name);
+      return swamp.data(
+        out.dataHandles.find((h) => h.name.startsWith("stand-in-next-"))!.name,
+      );
     };
     const raised = await app({
       step: "raise",
@@ -507,14 +509,52 @@ describe("@puddleworks/capture/requests", () => {
     expect(await next("reply", id)).toMatchObject({ due: false });
     await app({ step: "submit", id });
     // Before Agreed Olive is the requester, so the builder agent answers.
-    expect(await next("submit", id)).toEqual({
+    const first = await next("submit", id);
+    expect(first).toEqual({
       due: true,
       id,
       agent: "stand-in-agent",
       standInAs: "builder-agent@example.com",
       point: "clarify",
+      lock: first!.lock,
     });
-    expect(await next("reply", id)).toMatchObject({ due: true, point: "" });
+    expect(String(first!.lock)).toMatch(/^[0-9a-f-]{36}$/);
+    // One turn per request at a time: none starts until that one is done.
+    expect(await next("reply", id)).toMatchObject({ due: false, lock: "" });
+    // Only the turn that holds it frees it.
+    await run("app_stand_in_done", { principal: "user:alice", id, lock: "x" });
+    expect(await next("reply", id)).toMatchObject({ due: false });
+    await run("app_stand_in_done", {
+      principal: "user:alice",
+      id,
+      lock: first!.lock,
+    });
+    const second = await next("reply", id);
+    expect(second).toMatchObject({ due: true, point: "" });
+    // A turn whose run died lets go after 30 minutes.
+    swamp.written.push({
+      ...swamp.written.findLast((r) => r.name === `stand-in-lock-${id}`)!,
+      attributes: {
+        requestId: id,
+        held: true,
+        claim: second!.lock,
+        since: new Date(Date.now() - 31 * 60_000).toISOString(),
+      },
+    });
+    const third = await next("reply", id);
+    expect(third).toMatchObject({ due: true });
+    // The lapsed turn, finishing late, doesn't free the one that took over.
+    await run("app_stand_in_done", {
+      principal: "user:alice",
+      id,
+      lock: second!.lock,
+    });
+    expect(await next("reply", id)).toMatchObject({ due: false });
+    await run("app_stand_in_done", {
+      principal: "user:alice",
+      id,
+      lock: third!.lock,
+    });
     // Steps Slack follows with no turn.
     expect(await next("propose", id)).toMatchObject({ due: false });
     expect(await next("whoami", "")).toMatchObject({ due: false });
