@@ -48,6 +48,7 @@ Deno.test("the recipe leaves other turns to the model", () => {
       "last five things in capture",
       "last 5 things",
       "delete the last 5 things in capture",
+      "what are me the last 5 things in capture",
     ]
   ) {
     assertEquals(count(turn), undefined, turn);

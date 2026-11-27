@@ -356,9 +356,9 @@ Last 2 in Capture:
 ```
 
 It lists the requests you are on, most recently changed first, up to the number
-you asked for (1 to 99). With none, it answers "Nothing in Capture yet."
-Phrasings like "show me the last 3 requests in capture" or "latest 10 items in
-capture?" work too.
+you asked for (1 to 99). puddlerouter shows the first 20 and says how many more
+there are. With none, it answers "Nothing in Capture yet." Phrasings like "show
+me the last 3 requests in capture" or "latest 10 items in capture?" work too.
 
 The recipe is `@puddleworks/capture-latest-requests`, a workflow whose one step
 runs `list_requests`. The extension is labelled `puddlerouter-recipe`, so
@@ -373,7 +373,9 @@ scope, so the only way to stop it is not to run sync. You need:
   older one drops this recipe at sync. The requester comes only from that file,
   never from what was asked. Without it, nothing runs, and the answer says to
   set it.
-- A `@puddleworks/capture/requests` behavior named `capture`.
+- A `@puddleworks/capture/requests` behavior named `capture`, with the requester
+  on its people list (`add_person`). Otherwise every ask fails, and puddlerouter
+  only says swamp exited 1.
 - Capture has write methods, so it isn't labelled `effects-read`. To answer
   without asking first, list the method under `reads` in `puddlerouter.yaml`:
 
