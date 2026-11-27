@@ -26,7 +26,7 @@ export type GlobalArgs = z.infer<typeof GlobalArgsSchema>;
 /** The behavior type: serves the read-only Capture page. */
 export const model = {
   type: "@puddleworks/capture/web",
-  version: "2026.11.27.3",
+  version: "2026.11.27.4",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -146,6 +146,12 @@ export const model = {
       toVersion: "2026.11.27.3",
       description:
         "Released with one stand-in turn per request in the Capture app; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.27.4",
+      description:
+        "Released with the capture-latest-requests recipe workflow; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],

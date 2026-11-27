@@ -1,0 +1,82 @@
+{
+  "version": "2026.11.27.4",
+  "extension": "@puddleworks/capture",
+  "reviewedAt": "2026-11-27T18:03:33Z",
+  "dimensions": [
+    {
+      "id": "credentials-secrets",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. No secret added. The recipe's `as` is filled only from the desk's puddlerouter.yaml requester (engine runRecipe at recipes-requester-input 5c661cb, _lib/recipes.ts), never from the turn: the pattern's one capture is digits ([1-9]\\d?) and becomes `max`. With the real engine, a blank requester returns 'no requester: set requester in puddlerouter.yaml' and runs nothing; a set one goes as `--input as=owner@example.com` with --literal-inputs. README.md:383 uses you@example.com; the workflow, manifest and tests hold no email."
+    },
+    {
+      "id": "logging-quality",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. No new method or log line. list_requests logs 'Found {count} {scope} requests{more}' with structured properties (capture.ts:785-789). It ran cleanly in the scratch repo through both `swamp workflow run @puddleworks/capture-latest-requests` and the engine's exact argv."
+    },
+    {
+      "id": "error-handling",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. Probed in a scratch swamp repo with the worktree as an extension source. A requester not on the people list: list_requests exits 1 with 'stranger@example.com isn't in Capture's people list. Add them with add_person, then try again. (not_found)'; through the real runRecipe that becomes 'swamp exited 1', as README.md:376-378 says. No requester: nothing runs. Empty list: 'Nothing in Capture yet.' (fake exec). `swamp workflow run` with no `as` fails 'as is required'; max=abc fails 'max must be an integer'. Nothing throws."
+    },
+    {
+      "id": "testing-completeness",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. Ran: deno fmt --check (fails only on the untracked round-2 report swamp-extension-review/_puddleworks_capture-98abb805...json; every tracked file passes, 100 files checked), deno check --frozen (71 files, 0 errors), deno lint (0 problems), deno test --frozen as CI: 84 passed (312 steps), 0 failed, 2 ignored (the Factory build-result examples, which need CI's factory checkout). PR #56 CI 'check' and 'extension' are SUCCESS at 73baf94. tests/latest_recipe_test.ts copies the engine's ^(?:...)$/i wrapping rather than importing the engine, so I ran the real recipeFromWorkflow, parseRecipe, matchRecipe and runRecipe (recipes-requester-input 5c661cb) on the workflow: it parses with no error or note, matches 'last 5 things in capture' -> ['5'] and '  Show me the last 3  requests in capture ' -> ['3'], rejects 'last 05 ...', and git-log still takes 'what are the last 5 commits'. capture_test.ts:43-60 holds each upgrade chain's end to model.version and to manifest.yaml."
+    },
+    {
+      "id": "idempotency-resilience",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. list_requests only reads; it writes one requestList instance, rewritten on each run, so maxReruns '3' (workflow-capture-latest-requests.yaml:13) is safe. No cacheFor in the tag, so every turn reads fresh data."
+    },
+    {
+      "id": "api-contracts",
+      "verdict": "issue",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. LOW (release order, not code): the contract holds with the unpublished engine. recipeFromWorkflow gives method list_requests, definition capture, fixed {scope: mine}; parseRecipe keeps source and requester=as. runRecipe built ['behavior','run','@puddleworks/capture/requests','list_requests','capture','--repo-dir',<desk>,'--input','scope=mine','--input','max=25','--input','as=owner@example.com','--literal-inputs','--json'], and against a real scratch repo returned 'Last 3 in Capture:\\n#3 Gamma (draft)\\n#2 Beta (draft)\\n#1 Alpha (draft)'. parseConfig accepts README.md:382-385's reads entry with no errors. But the registry's @puddleworks/recipes is 2026.11.10.1, and README.md:371 names 2026.11.27.1, which is only in PR puddlerecipes#22 (OPEN, unmerged). With the published engine's packs.ts/config.ts (origin/main), recipeFromWorkflow refuses this workflow: 'step input as must be ${{ inputs.as }} with a capture declared for as'. So publish recipes 2026.11.27.1 first, or the README names a version that doesn't exist, and until then each sync pulls Capture and drops the recipe. Engine side, not Capture: sync's lookupEffects runs `swamp extension info @puddleworks/capture/requests`, which exits 1 ('not found in the registry'). That adds one error line per sync. It's harmless because the recipe counts as a write unless reads lists it."
+    },
+    {
+      "id": "resource-management",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. Nothing is held open: one swamp call per turn, writing one small requestList version."
+    },
+    {
+      "id": "published-surface-hygiene",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. manifest.yaml:60-64 and :71 add the workflow and the puddlerouter-recipe label; manifest.yaml:83 lists the file; effects-read is correctly absent (tests/latest_recipe_test.ts:29). Every README.md:347-386 claim checks out against the real engine: 1 to 99; the first 20 shown, then '… and 5 more' (25-item probe); 'Nothing in Capture yet.'; 'swamp exited 1' when the requester isn't on the list; the reads entry. README.md:364-369 says plainly what the label costs: sync installs or updates Capture in every desk whose allowlist has @puddleworks/*. That is a real side effect, but it is disclosed and it's the engine's pack design. nit: the tag's source.url is a loopback page for one request in the author's desk, which means nothing on anyone else's machine. The engine accepts http on 127.0.0.1."
+    },
+    {
+      "id": "schema-strictness",
+      "verdict": "issue",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. LOW: the workflow input's minimum 1 and maximum 99 (workflow-capture-latest-requests.yaml:19-22) aren't enforced by `swamp workflow run`. In the scratch repo, max=150 succeeded, and max=0 got past the input check and failed only in list_requests (z.coerce...min(1).max(1000), capture.ts:754). On the recipe path the pattern's [1-9]\\d? and the engine's int shape keep max between 1 and 99, so only a direct workflow run is loose. Method schemas are unchanged."
+    },
+    {
+      "id": "lifetime-gc",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. No new resource. requestList is lifetime infinite with garbageCollection 10 (capture.ts:495-496), so repeated turns keep at most 10 versions of requests-mine-all."
+    },
+    {
+      "id": "crud-completeness",
+      "verdict": "na",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. The change adds one read-only workflow and a label; there's no new resource or method."
+    },
+    {
+      "id": "preflight-checks",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. list_requests resolves the acting person (services.actor) before reading (capture.ts:768-770). The engine checks the requester is a well-formed email (requester.ts EMAIL) and the capture matches the int shape before calling swamp."
+    },
+    {
+      "id": "instance-names",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. list_requests writes `requests-${scope}-${status ?? 'all'}` (capture.ts:773-775), so scope mine with no status gives requests-mine-all, which is the tag's dataName. The real run's dataArtifacts held that name. runRecipe reads the artifact from its own run's JSON, so another run's list can't leak in."
+    },
+    {
+      "id": "data-access",
+      "verdict": "issue",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. LOW: services.list keeps only the requests the person is on, sorted by newestFirst (services.ts:120-123, updatedAt desc then id) and cut to max (services.ts:429-433); the real run listed #3, #2, #1 newest first. Two render edge cases I checked: (1) a legacy request whose number is still null (numbered only by a later raise, services.ts:368, or by import, :905) renders as '# Old (draft)' (fake exec). (2) A title with a newline, which create_request accepts (title is z.string().min(1).max(200) with no line rule, capture.ts:652), splits its line: the real run gave '#4 Line one\\nLine two (draft)'. Both are cosmetic."
+    },
+    {
+      "id": "version-upgrades",
+      "verdict": "pass",
+      "note": "Round 4, 2026.11.27.4, reviewed fresh at 73baf94. Round 3's BLOCKER is fixed. HEAD 73baf94 is rebased on origin/main 5b5b5e3 (unchanged after git fetch) and keeps main's 2026.11.27.3 entries (standInLock / app_stand_in_done, capture.ts:378-382). manifest.yaml:3 and the model versions (capture.ts:254, capture_slack.ts:147, capture_web.ts:29) are 2026.11.27.4, each with a no-op 2026.11.27.4 upgrade (capture.ts:384-389, capture_slack.ts:180-185, capture_web.ts:151-156). Registry latestVersion is 2026.11.27.3, and the dry run's version-exists check passed. In the scratch repo, a behavior set to typeVersion 2026.11.27.3 upgraded to 2026.11.27.4 on its next run with no settings changed. Rebuilding the app (bun install + swamp app build, then git checkout bun.lock) left the content hash at c99686ad...bc5f24."
+    }
+  ]
+}

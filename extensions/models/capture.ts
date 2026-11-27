@@ -251,7 +251,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.27.3",
+  version: "2026.11.27.4",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -379,6 +379,12 @@ export const model = {
       toVersion: "2026.11.27.3",
       description:
         "One stand-in turn per request at a time from the Capture app (standInLock, app_stand_in_done); no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
+    {
+      toVersion: "2026.11.27.4",
+      description:
+        "Released with the capture-latest-requests recipe workflow; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
   ],
