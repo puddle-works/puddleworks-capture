@@ -1,0 +1,41 @@
+id: 1da7ceaa-5d5a-49fd-892e-899287cf596b
+name: "@puddleworks/capture-latest-requests"
+description: >-
+  List the requests you are on in Capture, most recently changed first: each
+  one's number, title and status. The puddlerouterRecipe tag is the recipe
+  puddlerouter reads (through @puddleworks/recipes), so "last 5 things in
+  capture" is answered without calling a model. It runs the same method as
+  this workflow's one step, as the requester set in the desk's
+  puddlerouter.yaml. Needs a @puddleworks/capture/requests behavior named
+  capture.
+version: 1
+tags:
+  maxReruns: "3"
+  maxWallClock: "1m"
+  puddlerouterRecipe: '{"id":"capture-last-requests","extension":"@puddleworks/capture/requests","pattern":"(?:(?:show|list|give|what are)(?: me)? )?(?:the )?(?:last|latest|recent) ([1-9]\\d?) (?:things|requests|items) in capture[?.!]?","dataName":"requests-mine-all","inputs":{"max":{"capture":1,"as":"int"}},"requester":"as","each":{"path":"items","line":"#{number} {title} ({status})"},"template":"Last {count} in Capture:\n{lines}","empty":"Nothing in Capture yet.","source":{"url":"http://127.0.0.1:3002/requests/ac813583-f77b-44cf-a8b8-d3bc80ea0b96","version":1}}'
+inputs:
+  type: object
+  properties:
+    max:
+      type: integer
+      minimum: 1
+      maximum: 99
+      description: How many requests to list.
+    as:
+      type: string
+      description: The email of the person whose requests are listed.
+  required:
+    - max
+    - as
+jobs:
+  - name: main
+    steps:
+      - name: list
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: list_requests
+          inputs:
+            scope: mine
+            max: ${{ inputs.max }}
+            as: ${{ inputs.as }}

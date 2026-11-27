@@ -344,6 +344,45 @@ repository, branch and pull request, the published version and its registry page
 out. See [ADR-004](docs/adr/ADR-004-build-results.md) and
 [ADR-005](docs/adr/ADR-005-start-building.md).
 
+### Ask puddlerouter what's in Capture
+
+Capture ships its own puddlerouter recipe, so asking "last 5 things in capture"
+gets an answer from Capture without calling a model:
+
+```text
+Last 2 in Capture:
+#80 Recipe wanted: last 5 things in capture (building)
+#79 Weekly stock counts (draft)
+```
+
+It lists the requests you are on, most recently changed first, up to the number
+you asked for (1 to 99). With none, it answers "Nothing in Capture yet."
+Phrasings like "show me the last 3 requests in capture" or "latest 10 items in
+capture?" work too.
+
+The recipe is `@puddleworks/capture-latest-requests`, a workflow whose one step
+runs `list_requests`. The extension is labelled `puddlerouter-recipe`, so
+`@puddleworks/recipes-sync` finds it as a recipe pack. That has a cost: sync
+pulls every labelled pack its allowlist covers, and `@puddleworks/*` is on it by
+default. So each sync installs Capture in a desk that doesn't have it, and
+updates it to the latest release in one that does. `allow:` can't remove that
+scope, so the only way to stop it is not to run sync. You need:
+
+- `@puddleworks/recipes` at 2026.11.27.1 or later, the first release that fills
+  the recipe's `as` from the `requester` in the desk's `puddlerouter.yaml`. An
+  older one drops this recipe at sync. The requester comes only from that file,
+  never from what was asked. Without it, nothing runs, and the answer says to
+  set it.
+- A `@puddleworks/capture/requests` behavior named `capture`.
+- Capture has write methods, so it isn't labelled `effects-read`. To answer
+  without asking first, list the method under `reads` in `puddlerouter.yaml`:
+
+```yaml
+requester: you@example.com
+reads:
+  - "@puddleworks/capture/requests list_requests"
+```
+
 ### Log requests from a program
 
 `workflows/workflow-capture-log-request.yaml` is the workflow puddlerouter runs.
