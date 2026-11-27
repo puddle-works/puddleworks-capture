@@ -10,7 +10,11 @@ import {
 import type { Person, Request } from "./model.ts";
 import { can, canRead, canStartBuilding, roleOf } from "./permissions.ts";
 import { canEditDetails } from "./request.ts";
-import { BUILT_FROM_AGREED } from "./specification.ts";
+import {
+  BUILT_FROM_AGREED,
+  latestSpecification,
+  specificationProblems,
+} from "./specification.ts";
 
 /** What a stand-in agent may be offered; see STAND_IN_PERMISSIONS. */
 const STAND_IN_ACTIONS: readonly string[] = [
@@ -32,6 +36,18 @@ export type AllowedAction =
   | "invite"
   | "transferOwnership"
   | "join";
+
+/**
+ * Whether the draft spec could be proposed now. Proposing is refused until it
+ * can, so a button for it is offered only then.
+ */
+export function readyToPropose(request: Request): boolean {
+  const latest = latestSpecification(request);
+  return latest?.status === "draft" &&
+    specificationProblems(latest.content, request.requestedPhrase).length ===
+      0 &&
+    openQuestions(request).length === 0;
+}
 
 /**
  * What this person may do to the request right now, so a client can show only

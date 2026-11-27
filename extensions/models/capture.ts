@@ -16,6 +16,8 @@
  *   version for every change. Each has a number, #1 for the first, which
  *   methods take in place of its id.
  * - `person`: someone in the people list (`person-<userId>`).
+ * - `signedIn`: who a swamp serve login is, for the Capture app
+ *   (`signed-in-<nonce>`), kept a day.
  * - `view`: one request as the person asking sees it (`view-<id>`).
  * - `requestList`: the requests in one scope and status (`requests-<scope>-<status>`).
  * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
@@ -34,6 +36,7 @@ import {
   DISCUSSION_POINTS,
   DomainError,
   EXPORT_FORMATS,
+  PRINCIPAL_PATTERN,
   releaseProblems,
   REQUEST_STATUSES,
   REVIEW_VERDICTS,
@@ -45,6 +48,11 @@ import {
 } from "./_lib/domain/index.ts";
 import { createServices, type Services } from "./_lib/capture/services.ts";
 import type { Snapshot } from "./_lib/capture/snapshot.ts";
+import {
+  APP_STEPS,
+  appStepCall,
+  type AppStepInput,
+} from "./_lib/capture/app_steps.ts";
 import { readJsonInput } from "./_lib/capture/build_result_input.ts";
 import type { Stored } from "./_lib/capture/ports.ts";
 import { type StoreContext, SwampStore } from "./_lib/capture/swamp_store.ts";
@@ -93,6 +101,10 @@ const id = z.string().min(1).max(100).describe(
   "The request's number, such as 12 or #12, or its id.",
 );
 const withId = z.object({ as, id });
+/** A swamp serve login, as serve names a signed-in user. */
+const principal = z.string().trim().regex(PRINCIPAL_PATTERN, {
+  message: "is a swamp login such as user:alice.",
+});
 /** A discussion point; blank, as a workflow passes it, means none. */
 const point = z.preprocess(
   (v) => (v === "" ? undefined : v),
@@ -155,6 +167,24 @@ async function run(
   return { dataHandles: store.handles };
 }
 
+/**
+ * Runs another of this behavior's methods, as swamp would: its arguments
+ * checked by its schema, then its execute.
+ */
+function runMethod(
+  name: string,
+  input: Record<string, unknown>,
+  context: CaptureContext,
+): Output {
+  const method = (model.methods as unknown as Record<string, {
+    arguments: z.ZodType;
+    execute: (args: unknown, context: CaptureContext) => Output;
+  }>)[name];
+  const parsed = method.arguments.safeParse(input);
+  if (!parsed.success) throw new Error(z.prettifyError(parsed.error));
+  return method.execute(parsed.data, context);
+}
+
 function actingAs(args: { as?: string }, context: CaptureContext): string {
   const who = args.as ?? context.globalArgs.defaultAs;
   if (!who) {
@@ -211,7 +241,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.25.1",
+  version: "2026.11.27.1",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -323,6 +353,12 @@ export const model = {
         "Released with the app's steps and recent changes; no settings changed",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.27.1",
+      description:
+        "Swamp serve logins on the people list (principal), carried by snapshots, and app_step, which the Capture app runs as the signed-in person; no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     request: {
@@ -350,9 +386,23 @@ export const model = {
         email: z.string(),
         isBuilder: z.boolean(),
         standIn: z.enum(STAND_IN_ROLES).optional(),
+        principal: z.string().optional(),
       }),
       lifetime: "infinite" as const,
       garbageCollection: 10,
+    },
+    signedIn: {
+      description:
+        "Who in the people list a swamp serve login is, as app_step's whoami found it, so the Capture app can show that person's steps.",
+      schema: z.object({
+        principal: z.string(),
+        userId: z.string(),
+        name: z.string(),
+        email: z.string(),
+        isBuilder: z.boolean(),
+      }),
+      lifetime: "1d",
+      garbageCollection: 1,
     },
     view: {
       description:
@@ -453,6 +503,8 @@ export const model = {
         snapshotExportedAt: z.string(),
         peopleAdded: z.number().int(),
         peopleSkipped: z.number().int(),
+        loginsCarried: z.number().int(),
+        loginsDropped: z.number().int(),
         requestsAdded: z.number().int(),
         requestsSkipped: z.number().int(),
         requestsNumbered: z.number().int(),
@@ -479,6 +531,9 @@ export const model = {
         standIn: z.enum(STAND_IN_ROLES).optional().describe(
           "Marks a stand-in agent, not a person: requester or builder. It takes that role when one person holds both, and may only talk, draft and propose.",
         ),
+        principal: principal.optional().describe(
+          "Their swamp serve login, such as user:alice, so the Capture app acts as them when they sign in. One person each; never a stand-in.",
+        ),
       }),
       execute: (
         args: {
@@ -486,12 +541,18 @@ export const model = {
           name: string;
           builder: boolean;
           standIn?: (typeof STAND_IN_ROLES)[number];
+          principal?: string;
         },
         context: CaptureContext,
       ) =>
         run(context, async (services) => {
           const person = await services.addPerson(args);
-          context.logger.info("Added {name} <{email}>", { ...person });
+          context.logger.info(
+            person.principal
+              ? "Added {name} <{email}>; swamp login: {principal}"
+              : "Added {name} <{email}>",
+            { ...person },
+          );
         }),
     },
     update_person: {
@@ -505,18 +566,26 @@ export const model = {
         builder: flag.optional().describe(
           "Whether they are one of the builders.",
         ),
+        principal: principal.or(z.literal("")).optional().describe(
+          "Their swamp serve login, such as user:alice, so the Capture app acts as them when they sign in. Blank takes it away.",
+        ),
       }),
       execute: (
-        args: { email: string; name?: string; builder?: boolean },
+        args: {
+          email: string;
+          name?: string;
+          builder?: boolean;
+          principal?: string;
+        },
         context: CaptureContext,
       ) =>
         run(context, async (services) => {
           const person = await services.updatePerson(args);
           context.logger.info(
-            "Updated {name} <{email}>; builder: {isBuilder}",
-            {
-              ...person,
-            },
+            args.principal === undefined
+              ? "Updated {name} <{email}>; builder: {isBuilder}"
+              : "Updated {name} <{email}>; builder: {isBuilder}; swamp login: {login}",
+            { ...person, login: person.principal ?? "none" },
           );
         }),
     },
@@ -1126,6 +1195,95 @@ export const model = {
         }),
     },
 
+    app_step: {
+      description:
+        "Take one of the Capture app's steps as the person whose swamp serve login is principal, by the people list (add_person or update_person principal=user:…). Anyone not on it is refused. The app runs it only through the @puddleworks/capture-app-step workflow, which passes the run's own login, so the app can't say who acts. whoami writes who the login is (signed-in-<nonce>); each other step runs the method the Slack app runs for it, as that person.",
+      arguments: z.object({
+        principal: z.string().max(300).describe(
+          "The swamp serve login acting, such as user:alice. The workflow passes run.initiatedBy.",
+        ),
+        step: z.enum(APP_STEPS).describe("The step to take."),
+        id: z.string().max(100).default("").describe(
+          "The request's id; blank only for whoami and raise.",
+        ),
+        nonce: z.string().regex(/^[A-Za-z0-9-]{0,64}$/).default("").describe(
+          "whoami only: names the signedIn data it writes, so the app finds it.",
+        ),
+        version: z.coerce.number().int().min(0).default(0).describe(
+          "agree: the specification version shown.",
+        ),
+        note: reason("requestChanges: what should change."),
+        reason: reason("withdraw: why it is withdrawn."),
+        body: z.string().max(20_000).default("").describe(
+          "reply: what it says.",
+        ),
+        questionId: z.string().max(100).default("").describe(
+          "resolveQuestion: the question's message id.",
+        ),
+        result: z.string().max(200_000).default("").describe(
+          "recordBuildResult: the build result's JSON or https URL.",
+        ),
+        specification: z.string().max(200_000).default("").describe(
+          "editSpecification: the specification, as JSON text.",
+        ),
+        title: z.string().max(200).default("").describe("raise: the title."),
+        description: z.string().max(20_000).default("").describe(
+          "raise: what is wanted.",
+        ),
+        currentProcess: z.string().max(20_000).default("").describe(
+          "raise: how it is done today.",
+        ),
+        phrase: z.string().max(500).default("").describe(
+          "raise: the phrase someone would ask, if there is one.",
+        ),
+        idempotencyKey: z.string().max(200).default("").describe(
+          "raise: the same key from the same person gives the same request.",
+        ),
+      }),
+      execute: async (
+        args: AppStepInput & { principal: string; nonce: string },
+        context: CaptureContext,
+      ): Output => {
+        let call = null as ReturnType<typeof appStepCall> | null;
+        const found = await run(context, async (services, store) => {
+          const person = await services.signedIn(args.principal);
+          if (args.step !== "whoami") {
+            call = appStepCall(args, person.email);
+            return;
+          }
+          if (!args.nonce) {
+            throw new DomainError("invalid_input", "whoami needs a nonce.");
+          }
+          store.add(
+            await context.writeResource(
+              "signedIn",
+              `signed-in-${args.nonce}`,
+              {
+                principal: args.principal,
+                userId: person.userId,
+                name: person.name,
+                email: person.email,
+                isBuilder: person.isBuilder,
+              },
+            ),
+          );
+          context.logger.info("{principal} is {name} <{email}>", {
+            principal: args.principal,
+            name: person.name,
+            email: person.email,
+          });
+        });
+        if (call === null) return found;
+        const { method, args: input } = call;
+        context.logger.info("{principal} takes {step} as {as}", {
+          principal: args.principal,
+          step: args.step,
+          as: input.as,
+        });
+        return await runMethod(method, input, context);
+      },
+    },
+
     export_snapshot: {
       description:
         "Write everything Capture holds, people and every request whatever its sharing, to a new capture-snapshot/v1 file, so another repository can import it. The file holds people's emails.",
@@ -1207,7 +1365,7 @@ export const model = {
             }),
           );
           context.logger.info(
-            "Imported {peopleAdded} people and {requestsAdded} requests ({peopleSkipped} and {requestsSkipped} already here); numbered {requestsNumbered} requests",
+            "Imported {peopleAdded} people and {requestsAdded} requests ({peopleSkipped} and {requestsSkipped} already here); numbered {requestsNumbered} requests; carried {loginsCarried} swamp logins and left {loginsDropped} off, as already someone's here or on a stand-in",
             { ...counts },
           );
         }),

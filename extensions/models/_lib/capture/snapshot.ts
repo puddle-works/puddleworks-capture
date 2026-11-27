@@ -2,7 +2,11 @@
 // export_snapshot method writes it, as Capture's old Node app did, and the
 // import method brings it into swamp data, in this repository or another.
 import { z } from "npm:zod@4.6.7";
-import type { Person } from "../domain/index.ts";
+import {
+  type Person,
+  PRINCIPAL_PATTERN,
+  STAND_IN_ROLES,
+} from "../domain/index.ts";
 import type { Stored } from "./ports.ts";
 
 const PersonSchema = z.object({
@@ -10,6 +14,9 @@ const PersonSchema = z.object({
   name: z.string(),
   email: z.string().min(1),
   isBuilder: z.boolean(),
+  standIn: z.enum(STAND_IN_ROLES).optional(),
+  // Their swamp serve login; snapshots before logins have none.
+  principal: z.string().regex(PRINCIPAL_PATTERN).optional(),
 });
 
 // The request itself was checked by the domain when it was made; the import
@@ -61,6 +68,10 @@ export interface Snapshot {
 export interface ImportCounts {
   peopleAdded: number;
   peopleSkipped: number;
+  /** Logins left off people brought in: already someone's here, or on a stand-in. */
+  loginsDropped: number;
+  /** Logins kept on people brought in. */
+  loginsCarried: number;
   requestsAdded: number;
   requestsSkipped: number;
   /** Requests given a number: those brought in, and any here without one. */
