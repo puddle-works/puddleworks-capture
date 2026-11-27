@@ -539,12 +539,18 @@ agent's messages appear when its turn ends. The person needs no grant beyond
 reads, such as a vault, since a run's vault use is checked against who started
 it. Serve's `--max-run-duration`, if set, also bounds the agent's turn.
 
-It differs from Slack in three ways. A revision or a failed router test recorded
-elsewhere doesn't bring in a turn; run `@puddleworks/capture-stand-in` for
-those. Nothing stops two turns on one request at once, as Slack does, so two
-quick steps can each bring one in. With more than one stand-in for a role in the
-people list, the app takes the first by email, where Slack takes
-`builderAgentAs` and `requesterAgentAs`.
+As in Slack, one turn the app brings in runs on a request at a time: a step
+taken while one is running brings in none. The turn holds the request in
+`stand-in-lock-<id>` and frees it when it ends, whether or not it succeeded. A
+run that never finishes, such as one serve stopped, holds it until the claim
+lapses after 30 minutes; swamp doesn't stop a turn then, so set serve's
+`--max-run-duration` to 30 minutes or less to keep a long turn from overlapping
+the next. The lock is the app's own: it doesn't hold back the Slack app's turns,
+or a `@puddleworks/capture-stand-in` run started by hand. It differs from Slack
+in two ways. A revision or a failed router test recorded elsewhere doesn't bring
+in a turn; run `@puddleworks/capture-stand-in` for those. With more than one
+stand-in for a role in the people list, the app takes the first by email, where
+Slack takes `builderAgentAs` and `requesterAgentAs`.
 
 ```bash
 swamp extension pull @mgreten/cli-agent

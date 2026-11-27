@@ -20,6 +20,8 @@
  *   (`signed-in-<nonce>`), kept a day.
  * - `standInNext`: whether a stand-in's turn follows a step taken in the
  *   Capture app (`stand-in-next-<id>`), kept a day.
+ * - `standInLock`: whether such a turn holds its request
+ *   (`stand-in-lock-<id>`), so only one runs at a time.
  * - `view`: one request as the person asking sees it (`view-<id>`).
  * - `requestList`: the requests in one scope and status (`requests-<scope>-<status>`).
  * - `reviewPrompt`: what a reviewer of the frozen spec is asked (`review-prompt-<id>`).
@@ -55,6 +57,7 @@ import {
   APP_STEPS,
   appStepCall,
   type AppStepInput,
+  lockHeld,
   STAND_IN_AFTER,
 } from "./_lib/capture/app_steps.ts";
 import { readJsonInput } from "./_lib/capture/build_result_input.ts";
@@ -248,7 +251,7 @@ function change<A extends { as?: string; id: string }>(
 /** The behavior type: Capture's people and requests, and every use case on them. */
 export const model = {
   type: "@puddleworks/capture/requests",
-  version: "2026.11.27.2",
+  version: "2026.11.27.3",
   globalArguments: GlobalArgsSchema,
   // Moves existing instances' typeVersion along; the settings are unchanged.
   upgrades: [
@@ -372,6 +375,12 @@ export const model = {
         "standInAgent, so a stand-in agent takes its turn after a step taken in the Capture app; set values are kept and it defaults to blank",
       upgradeAttributes: (old: Record<string, unknown>) => old,
     },
+    {
+      toVersion: "2026.11.27.3",
+      description:
+        "One stand-in turn per request at a time from the Capture app (standInLock, app_stand_in_done); no settings changed",
+      upgradeAttributes: (old: Record<string, unknown>) => old,
+    },
   ],
   resources: {
     request: {
@@ -426,9 +435,22 @@ export const model = {
         agent: z.string(),
         standInAs: z.string(),
         point: z.string(),
+        lock: z.string().default(""),
       }),
       lifetime: "1d",
       garbageCollection: 5,
+    },
+    standInLock: {
+      description:
+        "Whether a stand-in's turn brought in by the Capture app holds a request, so only one runs at a time, as in Slack (stand-in-lock-<id>). A claim older than 30 minutes has lapsed.",
+      schema: z.object({
+        requestId: z.string(),
+        held: z.boolean(),
+        claim: z.string(),
+        since: z.string(),
+      }),
+      lifetime: "1d",
+      garbageCollection: 2,
     },
     view: {
       description:
@@ -1340,22 +1362,55 @@ export const model = {
             }
             next = await services.standInAfter(person, args.id, point);
           }
-          const id = next?.stored.request.id ?? args.id;
+          let id = next?.stored.request.id ?? args.id;
+          // One turn per request at a time, as in Slack. Swamp holds this
+          // behavior's lock for the whole method, so two runs can't both
+          // find the request free and both take it.
+          let lock = "";
+          let busy = false;
+          if (next) {
+            id = next.stored.request.id;
+            const lockName = `stand-in-lock-${id}`;
+            if (lockHeld(await context.readResource(lockName), new Date())) {
+              busy = true;
+            } else {
+              lock = crypto.randomUUID();
+            }
+          }
+          const due = next !== null && !busy;
           store.add(
             await context.writeResource(
               "standInNext",
               `stand-in-next-${id || "none"}`,
               {
-                due: next !== null,
+                due,
                 id,
-                agent: next ? agent : "",
-                standInAs: next?.standIn.email ?? "",
-                point: next?.point ?? "",
+                agent: due ? agent : "",
+                standInAs: due ? next!.standIn.email : "",
+                point: due ? next!.point ?? "" : "",
+                lock,
               },
             ),
           );
+          // Claimed last, so a step that failed before it holds nothing.
+          if (lock) {
+            store.add(
+              await context.writeResource(
+                "standInLock",
+                `stand-in-lock-${id}`,
+                {
+                  requestId: id,
+                  held: true,
+                  claim: lock,
+                  since: new Date().toISOString(),
+                },
+              ),
+            );
+          }
           context.logger.info(
-            next
+            busy
+              ? "{name} is already taking a turn on request #{number}; none starts after {step}"
+              : next
               ? "{name} takes its turn on request #{number} after {step}"
               : "No stand-in takes a turn after {step}",
             {
@@ -1363,6 +1418,48 @@ export const model = {
               number: next?.stored.number,
               step: args.step,
             },
+          );
+        }),
+    },
+
+    app_stand_in_done: {
+      description:
+        "After a stand-in's turn the Capture app brought in, free its request for the next, if this turn still holds it (lock is the claim app_stand_in made). The @puddleworks/capture-app-step workflow runs it however the turn ended.",
+      arguments: z.object({
+        principal: z.string().max(300).describe(
+          "The swamp serve login that took the step. The workflow passes run.initiatedBy.",
+        ),
+        id: z.string().min(1).max(100).describe("The request's id."),
+        lock: z.string().min(1).max(100).describe(
+          "The claim app_stand_in made on the request.",
+        ),
+      }),
+      execute: (
+        args: { principal: string; id: string; lock: string },
+        context: CaptureContext,
+      ): Output =>
+        // The claim says which turn this is, so a login changed meanwhile
+        // can't leave the request held.
+        run(context, async (_services, store) => {
+          const name = `stand-in-lock-${args.id}`;
+          const held = await context.readResource(name);
+          // A lapsed claim another turn has since taken stays that turn's.
+          if (held?.claim !== args.lock || held.held !== true) {
+            context.logger.info(
+              "The stand-in's turn on {id} no longer holds it",
+              { id: args.id },
+            );
+            return;
+          }
+          store.add(
+            await context.writeResource("standInLock", name, {
+              ...held,
+              held: false,
+            }),
+          );
+          context.logger.info(
+            "{principal}'s step freed request {id} for the next stand-in turn",
+            { principal: args.principal, id: args.id },
           );
         }),
     },

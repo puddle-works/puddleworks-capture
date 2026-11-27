@@ -44,6 +44,11 @@ Deno.test("the app reads data and runs only the step workflow", () => {
     workflow.includes('workflowIdOrName: "@puddleworks/capture-stand-in"'),
   );
   assert(!/^\s+(as|principal):\s*$/m.test(workflow.split("jobs:")[0]));
+  // The request is freed however the turn ended, but release runs only once
+  // next has said a turn was due: a failed step leaves next without outputs.
+  const release = workflow.slice(workflow.indexOf("- name: release"));
+  assert(/- step: next\s+condition:\s+type: succeeded/.test(release));
+  assert(/- step: stand_in\s+condition:\s+type: always/.test(release));
 });
 
 Deno.test("the app's page lets it connect to and load from no site", () => {
