@@ -472,6 +472,97 @@ describe("@puddleworks/capture/requests", () => {
     );
   });
 
+  it("brings in a stand-in after the app's steps as Slack does, and only then", async () => {
+    const { swamp, run } = setup({ standInAgent: "stand-in-agent" });
+    await run("add_person", {
+      email: "olive@example.com",
+      name: "Olive Owner",
+      builder: "true",
+      principal: "user:alice",
+    });
+    for (const role of ["builder", "requester"]) {
+      await run("add_person", {
+        email: `${role}-agent@example.com`,
+        name: `${role} agent`,
+        standIn: role,
+      });
+    }
+    const app = (input: Record<string, unknown>) =>
+      run("app_step", { principal: "user:alice", ...input });
+    const next = async (step: string, id: string) => {
+      const out = await run("app_stand_in", {
+        principal: "user:alice",
+        step,
+        id,
+      });
+      return swamp.data(out.dataHandles[0].name);
+    };
+    const raised = await app({
+      step: "raise",
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(raised.dataHandles.at(-1)!.name)!.id);
+    // A draft has no discussion yet.
+    expect(await next("reply", id)).toMatchObject({ due: false });
+    await app({ step: "submit", id });
+    // Before Agreed Olive is the requester, so the builder agent answers.
+    expect(await next("submit", id)).toEqual({
+      due: true,
+      id,
+      agent: "stand-in-agent",
+      standInAs: "builder-agent@example.com",
+      point: "clarify",
+    });
+    expect(await next("reply", id)).toMatchObject({ due: true, point: "" });
+    // Steps Slack follows with no turn.
+    expect(await next("propose", id)).toMatchObject({ due: false });
+    expect(await next("whoami", "")).toMatchObject({ due: false });
+    await expect.rejects(
+      run("app_stand_in", { principal: "user:carol", step: "reply", id }),
+      expect.objectContaining({
+        message: expect.stringContaining("(not_allowed)"),
+      }),
+    );
+    // Once another person builds on it, the roles are two people's.
+    await run("add_person", {
+      email: "bea@example.com",
+      name: "Bea Builder",
+      builder: "true",
+    });
+    await run("join_request", { as: "bea@example.com", id });
+    expect(await next("reply", id)).toMatchObject({ due: false });
+  });
+
+  it("brings in no stand-in when no agent is set", async () => {
+    const { swamp, run } = setup();
+    await run("add_person", {
+      email: "olive@example.com",
+      name: "Olive Owner",
+      builder: "true",
+      principal: "user:alice",
+    });
+    await run("add_person", {
+      email: "builder-agent@example.com",
+      name: "Builder agent",
+      standIn: "builder",
+    });
+    const raised = await run("app_step", {
+      principal: "user:alice",
+      step: "raise",
+      title: "Stock counts",
+      description: "",
+    });
+    const id = String(swamp.data(raised.dataHandles.at(-1)!.name)!.id);
+    await run("app_step", { principal: "user:alice", step: "submit", id });
+    const out = await run("app_stand_in", {
+      principal: "user:alice",
+      step: "submit",
+      id,
+    });
+    expect(swamp.data(out.dataHandles[0].name)).toMatchObject({ due: false });
+  });
+
   it("acts on a request named by its number, and writes it under its id", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);

@@ -16,6 +16,10 @@ import {
   stepsFor,
 } from "../extensions/apps/capture/src/steps.ts";
 import { model as requestsModel } from "../extensions/models/capture.ts";
+import {
+  followStep,
+  type StepEvent,
+} from "../extensions/apps/capture/src/step_events.ts";
 
 const app = join(import.meta.dirname!, "../extensions/apps/capture");
 const read = (path: string) =>
@@ -34,6 +38,11 @@ Deno.test("the app reads data and runs only the step workflow", () => {
     join(app, "../../../workflows/workflow-capture-app-step.yaml"),
   );
   assert(workflow.includes("principal: ${{ run.initiatedBy }}"));
+  // A stand-in's turn runs only when Capture says one is due.
+  assert(workflow.includes("guard: ${{ !steps.next.outputs.due }}"));
+  assert(
+    workflow.includes('workflowIdOrName: "@puddleworks/capture-stand-in"'),
+  );
   assert(!/^\s+(as|principal):\s*$/m.test(workflow.split("jobs:")[0]));
 });
 
@@ -165,5 +174,52 @@ Deno.test("a step's command quotes an email the shell would break on", () => {
       "export",
     ),
     `swamp behavior run capture export_outcome_spec --input id=7 --input 'as=o'\\''brien@example.com'`,
+  );
+});
+
+// A step's outcome, from its run's events. A stand-in's turn may follow in
+// the same run, so the step is done once Capture has said whether one
+// follows, and the app never waits for the turn.
+Deno.test("a step is done once taken, before any stand-in's turn", async () => {
+  async function* events(list: StepEvent[], thenHang = false) {
+    yield* list;
+    if (thenHang) await new Promise(() => {});
+  }
+  const started: StepEvent = { kind: "started", runId: "r1" };
+  // The run goes on into the agent's turn; the app stops following.
+  assertEquals(
+    await followStep(events([
+      started,
+      { kind: "step_completed", stepId: "step" },
+      { kind: "step_completed", stepId: "next" },
+    ], true)),
+    { ok: true, runId: "r1" },
+  );
+  // Capture's refusal of the step is what the app says.
+  assertEquals(
+    await followStep(events([
+      started,
+      { kind: "step_failed", stepId: "step", error: "Refused (not_allowed)" },
+    ], true)),
+    { ok: false, error: "Refused (not_allowed)" },
+  );
+  // The step was taken even when deciding on a stand-in fails.
+  assertEquals(
+    await followStep(events([
+      started,
+      { kind: "step_completed", stepId: "step" },
+      { kind: "step_failed", stepId: "next", error: "boom" },
+    ], true)),
+    { ok: true, runId: "r1" },
+  );
+  // A nested run's events aren't the step's.
+  assertEquals(
+    await followStep(events([
+      started,
+      { kind: "started", runId: "child", parentRunId: "r1" },
+      { kind: "step_failed", stepId: "prompt", error: "no turn" },
+      { kind: "completed", run: { id: "r1", status: "failed", jobs: [] } },
+    ])),
+    { ok: false, error: "The step failed." },
   );
 });

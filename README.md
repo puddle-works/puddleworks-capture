@@ -121,9 +121,9 @@ Don't give app users `run` on the requests behavior (`model:capture`): with it
 they can run any of its methods directly, `app_step` included, naming anyone
 with `as` or `principal`. Steps work only with the behavior named `capture`. A
 step that loses its connection may still have been taken, so check the page
-before taking it again. When one person is both requester and builder, the app
-doesn't start the stand-in agent as Slack does; run
-`@puddleworks/capture-stand-in`.
+before taking it again. When one person is both requester and builder, a
+stand-in agent takes its turn after their step, as in Slack (see Stand-in
+agents).
 
 As in the Slack app, a request shows each person the buttons for their steps:
 Submit, Propose (once the spec is ready), Agree, Ask for changes, Withdraw,
@@ -529,13 +529,29 @@ duplicate, own a request or be invited, and every method other than
 `@puddleworks/capture-stand-in` runs one turn with an agent behavior such as
 `@mgreten/cli-agent`, as `capture-review-spec` does. The Slack app runs it when
 the person replies, submits, edits the spec, asks for changes or resolves a
-question, and when a revision or a failed router test arrives:
+question, and when a revision or a failed router test arrives. The Capture app
+runs it after the same steps, once `standInAgent` is set on the requests
+behavior: `@puddleworks/capture-app-step` asks `app_stand_in` whether a turn
+follows and, if one does, runs the stand-in workflow nested, with the stand-in
+for that role from the people list. The app shows the step as done at once; the
+agent's messages appear when its turn ends. The person needs no grant beyond
+`run` on `@puddleworks/capture-app-step`, and whatever the agent behavior itself
+reads, such as a vault, since a run's vault use is checked against who started
+it. Serve's `--max-run-duration`, if set, also bounds the agent's turn.
+
+It differs from Slack in three ways. A revision or a failed router test recorded
+elsewhere doesn't bring in a turn; run `@puddleworks/capture-stand-in` for
+those. Nothing stops two turns on one request at once, as Slack does, so two
+quick steps can each bring one in. With more than one stand-in for a role in the
+people list, the app takes the first by email, where Slack takes
+`builderAgentAs` and `requesterAgentAs`.
 
 ```bash
 swamp extension pull @mgreten/cli-agent
 swamp behavior create @mgreten/cli-agent stand-in-agent \
   --global-arg defaultProvider=claude --global-arg defaultModel=sonnet
 swamp behavior edit slack   # set agent: stand-in-agent, builderAgentAs, requesterAgentAs
+swamp behavior edit capture # for the Capture app, set standInAgent: stand-in-agent
 swamp workflow run @puddleworks/capture-stand-in --input id=12 \
   --input agent=stand-in-agent --input standInAs=builder-agent@example.com
 ```

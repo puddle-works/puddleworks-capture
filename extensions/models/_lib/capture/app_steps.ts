@@ -3,7 +3,7 @@
 // through the @puddleworks/capture-app-step workflow, which names that person
 // by the run's own login (run.initiatedBy), so nothing the app sends can say
 // who acts. These are the steps the Slack app offers, with its guards.
-import { DomainError } from "../domain/index.ts";
+import { type DiscussionPoint, DomainError } from "../domain/index.ts";
 import { appBuildResultProblem } from "./build_result_input.ts";
 
 export const APP_STEPS = [
@@ -21,6 +21,20 @@ export const APP_STEPS = [
   "resolveQuestion",
 ] as const;
 export type AppStep = (typeof APP_STEPS)[number];
+
+/**
+ * The steps a stand-in agent's turn follows, as in the Slack app, and the
+ * discussion point each raises; null takes it from where the discussion is.
+ * Submitting raises duplicates instead when the request may repeat another.
+ */
+export const STAND_IN_AFTER: Partial<Record<AppStep, DiscussionPoint | null>> =
+  {
+    reply: null,
+    submit: "clarify",
+    requestChanges: "proposal",
+    editSpecification: null,
+    resolveQuestion: null,
+  };
 
 /** What the app sends with a step; a workflow passes "" for what it leaves out. */
 export interface AppStepInput {
