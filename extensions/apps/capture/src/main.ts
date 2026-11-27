@@ -1,8 +1,9 @@
-// The Capture app: the web behavior's read-only page, in the swamp dashboard.
-// It reads Capture's data through the dashboard (data:read), shows the list
-// at / and one request at /requests/<id>, and reads again as the data
-// changes. It changes nothing and calls no site: every change goes through
-// the requests behavior's methods.
+// The Capture app: the web behavior's page, in the swamp dashboard. It reads
+// Capture's data through the dashboard (data:read), shows the list at / and
+// one request at /requests/<id>, and reads again as the data changes. Under
+// swamp serve the signed-in person takes their steps, each a run of the
+// @puddleworks/capture-app-step workflow, which acts as whoever serve says
+// started it (act.ts). It calls no site.
 import { connectApp, followDataChanges } from "@swamp-club/app-sdk";
 import { h, render } from "preact";
 import type { PageData } from "../../../models/_lib/web/page/view.ts";
@@ -10,7 +11,8 @@ import { pageView } from "../../../models/_lib/web/page/view.ts";
 import "../../../../web/src/web.css";
 import "./app.css";
 import { openCapture, REQUESTS_TYPE } from "./capture_data.ts";
-import { StepsPanel } from "./steps.ts";
+import { type Acting, type PanelState, StepsPanel } from "./steps.ts";
+import { takeStep, whoAmI } from "./act.ts";
 
 const root = document.getElementById("root")!;
 
@@ -51,9 +53,16 @@ async function main() {
   let path = "/";
   let shown: string | null = null;
   let show = () => {};
-  // Who the person viewing says they are: for their steps only. The sandbox
-  // keeps no storage, so it lasts until the app reloads.
+  // On the local dashboard, who the person viewing says they are: for their
+  // steps only. The sandbox keeps no storage, so it lasts until the app reloads.
   let viewerEmail = "";
+  let acting: Acting = { kind: "checking" };
+  const state: PanelState = {
+    open: null,
+    drafts: {},
+    busy: false,
+    flash: null,
+  };
   let changed = () => {};
   // Under swamp serve the dashboard connects to serve after the app opens,
   // and refuses a request sent while it isn't connected, so reads wait.
@@ -95,6 +104,45 @@ async function main() {
     }
   }
   const { behavior, source } = opened;
+  if (session.app.local) acting = { kind: "picker" };
+  // The step workflow acts on the behavior named capture only.
+  else if (behavior !== "capture") {
+    acting = {
+      kind: "refused",
+      reason:
+        `Steps are taken on the requests behavior named capture; this shows ${behavior}.`,
+    };
+  }
+
+  /** Takes one step, then reads again so the page shows what it did. */
+  const send = async (
+    inputs: Record<string, string | number>,
+    done: string,
+  ) => {
+    if (state.busy) return;
+    state.busy = true;
+    state.flash = null;
+    show();
+    const outcome = await takeStep(client, inputs);
+    state.busy = false;
+    if (outcome.ok) {
+      state.open = null;
+      state.drafts = {};
+      state.flash = { text: done, error: false };
+      await source.refresh().catch(() => {});
+    } else {
+      state.flash = { text: outcome.error, error: true };
+    }
+    show();
+  };
+  const onOpen = (step: string | null) => {
+    state.open = step;
+    state.drafts = step === "raise"
+      ? { idempotencyKey: crypto.randomUUID() }
+      : {};
+    state.flash = null;
+    show();
+  };
 
   show = () => {
     const parts = segments(path) ?? ["not", "found"];
@@ -119,11 +167,15 @@ async function main() {
           requests,
           people,
           current,
-          viewer: people.find((p) => p.email === viewerEmail) ?? null,
+          acting,
+          picked: people.find((p) => p.email === viewerEmail) ?? null,
           onViewer: (email: string) => {
             viewerEmail = email;
             show();
           },
+          state,
+          send,
+          onOpen,
         }),
     );
     // A re-read keeps what was open on the same page.
@@ -138,12 +190,30 @@ async function main() {
         (d as HTMLDetailsElement).open
       )
       : [];
-    // Re-rendering replaces the picker, so focus goes back to it.
-    const picking = document.activeElement?.matches(".view-as select");
+    // Re-rendering replaces the picker and the forms, so focus goes back.
+    const active = document.activeElement as HTMLInputElement | null;
+    const picking = active?.matches(".view-as select");
+    const typing = active?.closest(".app-panel form") ? active.name : null;
+    const caret = typing
+      ? [active!.selectionStart, active!.selectionEnd]
+      : null;
     render(null, root);
     root.replaceChildren();
     render(page, root);
     if (picking) root.querySelector<HTMLElement>(".view-as select")?.focus();
+    if (typing) {
+      const again = root.querySelector<HTMLInputElement>(
+        `.app-panel form [name="${CSS.escape(typing)}"]`,
+      );
+      again?.focus();
+      if (again && caret && "setSelectionRange" in again) {
+        try {
+          again.setSelectionRange(caret[0], caret[1]);
+        } catch {
+          // A select has no caret.
+        }
+      }
+    }
     document.title = `${title} — Capture`;
     for (const id of wasOpen) {
       const button = root.querySelector<HTMLButtonElement>(
@@ -157,6 +227,14 @@ async function main() {
     if (!same) scrollTo(0, 0);
     shown = path;
   };
+
+  // What is typed into a step's form, kept across re-reads.
+  root.addEventListener("input", (event) => {
+    const target = event.target as HTMLInputElement;
+    if (target.name && target.closest(".app-panel form")) {
+      state.drafts[target.name] = target.value;
+    }
+  });
 
   root.addEventListener("click", (event) => {
     const target = event.target as Element;
@@ -185,6 +263,15 @@ async function main() {
   });
 
   show();
+
+  // Who is signed in, by Capture's people list; until then, no steps.
+  if (acting.kind === "checking") {
+    const found = await whoAmI(client, behavior);
+    acting = "person" in found
+      ? { kind: "signedIn", person: found.person }
+      : { kind: "refused", reason: found.error };
+    show();
+  }
 
   // One read at a time; a change during a read reads again after it.
   let reading: Promise<void> | null = null;

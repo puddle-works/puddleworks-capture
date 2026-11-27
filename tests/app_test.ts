@@ -21,13 +21,20 @@ const app = join(import.meta.dirname!, "../extensions/apps/capture");
 const read = (path: string) =>
   Deno.readTextFileSync(path.startsWith("/") ? path : join(app, path));
 
-Deno.test("the app asks only to read data, and to run nothing", () => {
+// The app runs only the workflow that acts as the run's own login, never a
+// method, which would let it say who acts with `as`.
+Deno.test("the app reads data and runs only the step workflow", () => {
   const yaml = read("app.yaml");
   const field = (name: string) =>
     new RegExp(`^${name}:\\s*(.*)$`, "m").exec(yaml)?.[1]?.trim();
   assertEquals(field("capabilities"), "[data:read]");
-  assertEquals(field("run"), "[]");
+  assertEquals(field("run"), '["@puddleworks/capture-app-step"]');
   assertEquals(field("methods"), "[]");
+  const workflow = Deno.readTextFileSync(
+    join(app, "../../../workflows/workflow-capture-app-step.yaml"),
+  );
+  assert(workflow.includes("principal: ${{ run.initiatedBy }}"));
+  assert(!/^\s+(as|principal):\s*$/m.test(workflow.split("jobs:")[0]));
 });
 
 Deno.test("the app's page lets it connect to and load from no site", () => {

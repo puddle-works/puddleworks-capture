@@ -21,6 +21,32 @@ function parseJson(text: string, what: string): unknown {
   }
 }
 
+/**
+ * Why a build result typed into an app for request `requestId` is refused,
+ * or null. From an app it is never a path on the machine Capture runs on:
+ * only JSON, which must be for that request, or an https URL.
+ */
+export function appBuildResultProblem(
+  result: string,
+  requestId: string,
+): string | null {
+  const given = result.trim();
+  if (given.startsWith("{")) {
+    let url = "";
+    try {
+      url = String(JSON.parse(given)?.source?.url ?? "");
+    } catch {
+      return "That build result isn't valid JSON.";
+    }
+    return url.endsWith(`/requests/${requestId}`)
+      ? null
+      : "That build result is for another request; record it from that request.";
+  }
+  return given.startsWith("https://")
+    ? null
+    : "Give the build result as its https URL or its JSON.";
+}
+
 export async function readJsonInput(
   value: unknown,
   { repoDir, fetch }: JsonInputDeps,

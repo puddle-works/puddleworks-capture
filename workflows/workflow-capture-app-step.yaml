@@ -1,0 +1,105 @@
+id: 7c1d2e9a-4b6f-4e38-a0d5-3f9b8c2e6a14
+name: "@puddleworks/capture-app-step"
+description: >-
+  Take one of the Capture app's steps as the person signed in to swamp serve.
+  The person is the run's own login (run.initiatedBy), matched to the people
+  list by add_person or update_person principal=user:…; no input names
+  who acts, and anyone not on the list is refused. The Capture app may run
+  only this workflow. Needs a @puddleworks/capture/requests behavior named
+  capture.
+version: 1
+tags:
+  maxWallClock: "2m"
+inputs:
+  type: object
+  properties:
+    step:
+      type: string
+      enum:
+        - whoami
+        - raise
+        - reply
+        - submit
+        - propose
+        - agree
+        - requestChanges
+        - withdraw
+        - join
+        - editSpecification
+        - recordBuildResult
+        - resolveQuestion
+      description: The step to take; whoami only says who the login is.
+    id:
+      type: string
+      description: The request's id; blank for whoami and raise.
+      default: ""
+    nonce:
+      type: string
+      description: whoami only; names the signed-in-<nonce> data it writes.
+      default: ""
+    version:
+      type: integer
+      description: agree only; the specification version shown.
+      default: 0
+    note:
+      type: string
+      default: ""
+    reason:
+      type: string
+      default: ""
+    body:
+      type: string
+      default: ""
+    questionId:
+      type: string
+      default: ""
+    result:
+      type: string
+      description: recordBuildResult only; its JSON or https URL.
+      default: ""
+    specification:
+      type: string
+      description: editSpecification only; as JSON text.
+      default: ""
+    title:
+      type: string
+      default: ""
+    description:
+      type: string
+      default: ""
+    currentProcess:
+      type: string
+      default: ""
+    phrase:
+      type: string
+      default: ""
+    idempotencyKey:
+      type: string
+      default: ""
+  required: [step]
+jobs:
+  - name: main
+    steps:
+      - name: step
+        description: Take the step as the signed-in person
+        task:
+          type: model_method
+          modelIdOrName: capture
+          methodName: app_step
+          inputs:
+            principal: ${{ run.initiatedBy }}
+            step: ${{ inputs.step }}
+            id: ${{ inputs.id }}
+            nonce: ${{ inputs.nonce }}
+            version: ${{ inputs.version }}
+            note: ${{ inputs.note }}
+            reason: ${{ inputs.reason }}
+            body: ${{ inputs.body }}
+            questionId: ${{ inputs.questionId }}
+            result: ${{ inputs.result }}
+            specification: ${{ inputs.specification }}
+            title: ${{ inputs.title }}
+            description: ${{ inputs.description }}
+            currentProcess: ${{ inputs.currentProcess }}
+            phrase: ${{ inputs.phrase }}
+            idempotencyKey: ${{ inputs.idempotencyKey }}

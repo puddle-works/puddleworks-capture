@@ -5,7 +5,7 @@ import type { SpecificationContent } from "../domain/index.ts";
 
 export const FIELD_MAX = 3_000;
 
-type Field = {
+export type Field = {
   id: string;
   label: string;
   hint?: string;
@@ -13,7 +13,7 @@ type Field = {
   optional?: boolean;
 };
 
-const FIELDS: Field[] = [
+export const FIELDS: Field[] = [
   { id: "problemStatement", label: "Problem", multiline: true },
   { id: "desiredOutcome", label: "Desired outcome", multiline: true },
   { id: "scopeIn", label: "In scope", hint: "One a line.", multiline: true },

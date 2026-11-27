@@ -403,6 +403,8 @@ describe("import", () => {
     expect(first).toEqual({
       peopleAdded: 1,
       peopleSkipped: 1,
+      loginsDropped: 0,
+      loginsCarried: 0,
       requestsAdded: 1,
       requestsSkipped: 0,
       requestsNumbered: 1,
@@ -411,6 +413,8 @@ describe("import", () => {
     expect(again).toEqual({
       peopleAdded: 0,
       peopleSkipped: 2,
+      loginsDropped: 0,
+      loginsCarried: 0,
       requestsAdded: 0,
       requestsSkipped: 1,
       requestsNumbered: 0,
@@ -421,6 +425,47 @@ describe("import", () => {
       before: { name: "Old name" },
       number: 2,
     });
+  });
+
+  it("carries swamp logins across, each still one person's", async () => {
+    const { services } = await setup();
+    await services.updatePerson({ email: OLIVE, principal: "user:alice" });
+    const exported = await services.exportSnapshot();
+    expect(exported.people.find((p) => p.email === OLIVE)?.principal).toBe(
+      "user:alice",
+    );
+    const { store: there, services: other } = await setup();
+    await other.updatePerson({ email: BEA, principal: "user:bob" });
+    const counts = await other.importSnapshot({
+      ...snapshot,
+      people: [
+        { ...snapshot.people[0], principal: "user:carol" },
+        // user:bob is Bea's here, so Dee comes in without it.
+        {
+          userId: "u-dee",
+          name: "Dee",
+          email: "dee@example.com",
+          isBuilder: false,
+          principal: "user:bob",
+        },
+      ],
+    });
+    expect(counts.loginsDropped).toBe(1);
+    expect(counts.loginsCarried).toBe(1);
+    expect((await other.signedIn("user:carol")).email).toBe("old@example.com");
+    expect((await other.signedIn("user:bob")).email).toBe(BEA);
+    expect(
+      (await there.allPeople()).find((p) => p.email === "dee@example.com")
+        ?.principal,
+    ).toBe(undefined);
+    // A login that isn't one refuses the whole file.
+    await expect.rejects(
+      other.importSnapshot({
+        ...snapshot,
+        people: [{ ...snapshot.people[0], principal: "alice" }],
+      }),
+      expect.objectContaining({ code: "invalid_input" }),
+    );
   });
 
   it("numbers what it brings in, oldest first, after the requests already here", async () => {
@@ -528,6 +573,8 @@ describe("export", () => {
     expect(await to.services.importSnapshot(file)).toEqual({
       peopleAdded: 3,
       peopleSkipped: 0,
+      loginsDropped: 0,
+      loginsCarried: 0,
       requestsAdded: 2,
       requestsSkipped: 0,
       requestsNumbered: 0,

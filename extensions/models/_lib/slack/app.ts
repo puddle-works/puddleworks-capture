@@ -16,11 +16,12 @@ import {
   openQuestions,
   type Person,
   possibleDuplicates,
+  readyToPropose,
   roleOf,
-  specificationProblems,
   standInRole,
   statusWords,
 } from "../domain/index.ts";
+import { appBuildResultProblem } from "../capture/build_result_input.ts";
 import type { Stored } from "../capture/ports.ts";
 import type { SlackCall } from "./api.ts";
 import type { Envelope } from "./socket.ts";
@@ -184,12 +185,8 @@ export function createApp(deps: AppDeps, config: AppConfig) {
     intro?: string,
   ) {
     const { request } = stored;
-    // Proposing is also refused while the spec isn't ready, so it isn't offered.
     const latest = latestSpecification(request);
-    const ready = latest?.status === "draft" &&
-      specificationProblems(latest.content, request.requestedPhrase).length ===
-        0 &&
-      openQuestions(request).length === 0;
+    const ready = readyToPropose(request);
     const allowed = allowedActions(request, person).filter((a) =>
       a in BUTTONS && (a !== "propose" || ready)
     );
@@ -663,23 +660,8 @@ export function createApp(deps: AppDeps, config: AppConfig) {
     } else if (name === "recordBuildResult") {
       // From chat, never a path on this machine.
       const result = value("result").trim();
-      if (result.startsWith("{")) {
-        let url = "";
-        try {
-          url = String(JSON.parse(result)?.source?.url ?? "");
-        } catch {
-          throw new CaptureRefusal("That build result isn't valid JSON.");
-        }
-        if (!url.endsWith(`/requests/${requestId}`)) {
-          throw new CaptureRefusal(
-            "That build result is for another request; record it from that request's thread.",
-          );
-        }
-      } else if (!result.startsWith("https://")) {
-        throw new CaptureRefusal(
-          "Give the build result as its https URL or its JSON.",
-        );
-      }
+      const problem = appBuildResultProblem(result, requestId);
+      if (problem) throw new CaptureRefusal(problem);
       await capture("record_build_result", { as: person.email, result });
       await syncAll();
     } else if (name === "editSpecification") {

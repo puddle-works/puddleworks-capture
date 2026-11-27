@@ -40,6 +40,7 @@ putting it in front of people is
 | `@puddleworks/capture-review-spec` (workflow) | Has an agent review the spec up for agreement                       |
 | `@puddleworks/capture/slack`                  | `serve`: each request discussed in its own Slack thread             |
 | `@puddleworks/capture-stand-in` (workflow)    | A stand-in agent's turn when one person is requester and builder    |
+| `@puddleworks/capture-app-step` (workflow)    | One Capture app step, as the person signed in to swamp serve        |
 
 Set it up in a swamp repository:
 
@@ -87,20 +88,59 @@ swamp access grant create --subject group:ops --allow read --on 'data:capture'
 Without the first, the app isn't listed and its address says it isn't available.
 Without the second, it opens and shows serve's refusal.
 
-It only reads. It asks for `data:read` and nothing else: no workflows to run and
+It asks for `data:read` and one workflow, `@puddleworks/capture-app-step`, and
 no methods. It reads the people list and requests of one requests behavior with
 `data.query`, and reads them again when `data.subscribe` says they changed. It
 picks the behavior when it opens: the one named `capture`, or else the first by
 name that has people; reload the app after adding the first person.
 
-As in the Slack app, it shows each person their steps and the status changes.
-Choose who you are under **Viewing as**: the list then shows the requests
-waiting on you, and a request shows each step Capture's rules would let you
-take, with the `swamp behavior run` command that takes it. The choice is only
-for showing steps, and it lasts until the app reloads; anyone can pick anyone,
-as with `as`. **Recent changes** on the list shows the latest Agreed, Building
-and Released, and failed router tests, as the Slack app posts them. As on the
-served page, everyone who can open it sees every request and everyone's email.
+**It acts as whoever is signed in to swamp serve.** Give each person their serve
+login in the people list: the `user:<id>` serve records as who started a run.
+With token sign-in the id is the token's username (`user:alice`); with OAuth it
+is the OAuth `sub`, not a name. Someone not set up yet who opens the app is told
+the exact login to set:
+
+```bash
+swamp behavior run capture update_person --input email=olive@example.com \
+  --input principal=user:alice
+```
+
+Each step the app takes is a run of `@puddleworks/capture-app-step`. Serve
+records who started a run, and the workflow passes that login
+(`run.initiatedBy`) to Capture, which finds the person with it. No input names
+who acts, so nothing the app sends can make it act as someone else. A login on
+no one in the list, or no login at all, is refused, and so is the local
+dashboard, where swamp lets apps run nothing. A login belongs to one person, and
+never to a stand-in agent. Taking steps needs `run` on the workflow as well:
+
+```bash
+swamp access grant create --subject group:ops --allow run --on 'workflow:@puddleworks/capture-app-step'
+```
+
+Don't give app users `run` on the requests behavior (`model:capture`): with it
+they can run any of its methods directly, `app_step` included, naming anyone
+with `as` or `principal`. Steps work only with the behavior named `capture`. A
+step that loses its connection may still have been taken, so check the page
+before taking it again. When one person is both requester and builder, the app
+doesn't start the stand-in agent as Slack does; run
+`@puddleworks/capture-stand-in`.
+
+As in the Slack app, a request shows each person the buttons for their steps:
+Submit, Propose (once the spec is ready), Agree, Ask for changes, Withdraw,
+Join, Edit spec and Record build, with Mark answered on open questions and a
+reply box. The list has **Raise a request**, which logs a draft. Agree names the
+version on screen, so a page left open can't agree to a newer one. Record build
+takes only the build result's JSON, for that request, or an https URL, never a
+path on the machine. Any other step Capture would allow is named, to take with
+`swamp behavior run`. The list shows the requests waiting on you, and **Recent
+changes** the latest Agreed, Building and Released, and failed router tests, as
+the Slack app posts them.
+
+On the local dashboard there is no login, so you choose who you are under
+**Viewing as**. That only shows your steps, with the `swamp behavior run`
+command that takes each one; anyone can pick anyone, as with `as`. As on the
+served page, everyone who can open the app sees every request and everyone's
+email.
 
 **It sends nothing to any site.** Capture holds people's emails, so the app
 calls no external site and loads nothing from one. Swamp lets an app send what
@@ -122,8 +162,9 @@ exports; builders join open requests, write the specification and record what
 they built; reviewers ask questions and ask for changes; observers read.
 Agreeing waits until every question is resolved. Agreeing is the hand-off: it
 writes the agreed version as an `outcomeSpec` document (`outcome-spec-<id>`) for
-the builder, and the request stays Agreed. There is no sign-in, so anyone who
-can run swamp in the repository can act as anyone on the list.
+the builder, and the request stays Agreed. A method has no sign-in, so anyone
+who can run swamp in the repository can act as anyone on the list; only the
+Capture app, under swamp serve, acts as the signed-in person.
 
 ```bash
 swamp behavior run capture create_request --input title="Weekly stock counts" \
@@ -540,6 +581,13 @@ their emails, and every request whatever its sharing, with its number, messages,
 specification versions, history and idempotency keys. It is written readable by
 you only and never over an existing file. Keep it out of git and delete it once
 the move is checked.
+
+Each person's swamp serve login goes with them (`loginsCarried` in
+`import-latest`). A login means someone only to the serve that signed them in,
+so check them when the new repository is served with another sign-in. A login
+someone in the new repository already has stays theirs: the person brought in
+comes without it, counted as `loginsDropped`, and can be given another with
+`update_person`. Someone already in the new repository keeps their own login.
 
 ```bash
 # In the old repository

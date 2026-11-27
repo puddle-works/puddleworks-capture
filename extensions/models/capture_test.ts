@@ -361,6 +361,117 @@ describe("@puddleworks/capture/requests", () => {
     });
   });
 
+  it("takes the app's steps as the person a swamp login is, and no one else", async () => {
+    const { swamp, run } = setup({ defaultAs: "bea@example.com" });
+    await run("add_person", {
+      email: "olive@example.com",
+      name: "Olive Owner",
+      principal: "user:alice",
+    });
+    await run("add_person", {
+      email: "bea@example.com",
+      name: "Bea Builder",
+      builder: "true",
+      principal: "user:bob",
+    });
+    // One person each, and never a stand-in.
+    await expect.rejects(
+      run("update_person", {
+        email: "olive@example.com",
+        principal: "user:bob",
+      }),
+      expect.objectContaining({ message: expect.stringContaining("already") }),
+    );
+    await expect.rejects(
+      run("add_person", {
+        email: "agent@example.com",
+        name: "Agent",
+        standIn: "builder",
+        principal: "user:agent",
+      }),
+      expect.objectContaining({ message: expect.stringContaining("stand-in") }),
+    );
+    const app = (principal: string, input: Record<string, unknown>) =>
+      run("app_step", { principal, ...input });
+    const who = await app("user:alice", { step: "whoami", nonce: "n1" });
+    expect(swamp.data(who.dataHandles[0].name)).toMatchObject({
+      principal: "user:alice",
+      email: "olive@example.com",
+    });
+    // Not on the list, not a user, or nobody: refused, whatever defaultAs says.
+    for (const principal of ["user:carol", "service:scheduler", "ghost"]) {
+      await expect.rejects(
+        app(principal, { step: "raise", title: "x", description: "" }),
+        expect.objectContaining({
+          message: expect.stringContaining("(not_allowed)"),
+        }),
+      );
+    }
+    const raised = await app("user:alice", {
+      step: "raise",
+      title: "Stock counts",
+      description: "",
+      idempotencyKey: "app-1",
+    });
+    const id = String(swamp.data(raised.dataHandles.at(-1)!.name)!.id);
+    await app("user:alice", { step: "submit", id });
+    await app("user:bob", { step: "join", id });
+    await app("user:bob", {
+      step: "editSpecification",
+      id,
+      specification: JSON.stringify(goodSpec),
+    });
+    await app("user:bob", { step: "propose", id });
+    // Bob acts as Bea, so he can't agree, and Olive must name the version.
+    await expect.rejects(
+      app("user:bob", { step: "agree", id, version: 1 }),
+      expect.objectContaining({
+        message: expect.stringContaining("(not_allowed)"),
+      }),
+    );
+    await expect.rejects(
+      app("user:alice", { step: "agree", id }),
+      expect.objectContaining({ message: expect.stringContaining("version") }),
+    );
+    await app("user:alice", { step: "agree", id, version: 1 });
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "agreed" });
+    // From the app, a build result is never a path on this machine.
+    await expect.rejects(
+      app("user:bob", { step: "recordBuildResult", id, result: "build.json" }),
+      expect.objectContaining({
+        message: expect.stringContaining("https URL or its JSON"),
+      }),
+    );
+    // Nor JSON for another request.
+    await expect.rejects(
+      app("user:bob", {
+        step: "recordBuildResult",
+        id,
+        result: JSON.stringify({
+          source: { url: "http://127.0.0.1:3002/requests/other" },
+        }),
+      }),
+      expect.objectContaining({
+        message: expect.stringContaining("another request"),
+      }),
+    );
+    await expect.rejects(
+      app("user:alice", { step: "whoami" }),
+      expect.objectContaining({ message: expect.stringContaining("nonce") }),
+    );
+    // A login taken away no longer acts.
+    await run("update_person", { email: "bea@example.com", principal: "" });
+    expect(swamp.logs.at(-1)).toBe(
+      "Updated Bea Builder <bea@example.com>; builder: true; swamp login: none",
+    );
+    await expect.rejects(
+      app("user:bob", { step: "reply", id, body: "Still me?" }),
+      expect.objectContaining({
+        message: expect.stringContaining("(not_allowed)"),
+      }),
+    );
+  });
+
   it("acts on a request named by its number, and writes it under its id", async () => {
     const { swamp, run } = setup({ defaultAs: "olive@example.com" });
     await people(run);

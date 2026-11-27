@@ -80,6 +80,8 @@ export function toPerson(data: Record<string, unknown>): Person {
     isBuilder: data.isBuilder === true,
     ...((data.standIn === "requester" || data.standIn === "builder") &&
       { standIn: data.standIn }),
+    ...(typeof data.principal === "string" && data.principal !== "" &&
+      { principal: data.principal }),
   };
 }
 

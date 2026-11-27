@@ -221,6 +221,29 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
     return { stored, standIn, at };
   }
 
+  /**
+   * A swamp serve login for `person`, checked: one person each, and never a
+   * stand-in, which acts only through its turn. "" means none.
+   */
+  async function checkPrincipal(principal: string, person: Person) {
+    if (principal === "") return;
+    if (person.standIn) {
+      throw new DomainError(
+        "invalid_input",
+        `${person.name} is a stand-in agent, so it can't have a swamp login.`,
+      );
+    }
+    const holder = (await store.allPeople()).find((p) =>
+      p.principal === principal && p.userId !== person.userId
+    );
+    if (holder) {
+      throw new DomainError(
+        "invalid_input",
+        `${principal} is already ${holder.email}'s swamp login.`,
+      );
+    }
+  }
+
   return {
     async addPerson(
       input: {
@@ -228,6 +251,7 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         name: string;
         builder: boolean;
         standIn?: StandInRole;
+        principal?: string;
       },
     ): Promise<Person> {
       const email = input.email.trim().toLowerCase();
@@ -243,26 +267,63 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
         email,
         isBuilder: input.builder,
         ...(input.standIn && { standIn: input.standIn }),
+        ...(input.principal && { principal: input.principal }),
       };
+      await checkPrincipal(input.principal ?? "", person);
       await store.savePerson(person);
       return person;
     },
 
-    /** Changes the people list only: requests keep the name someone had when they joined. */
+    /**
+     * Changes the people list only: requests keep the name someone had when
+     * they joined. A principal of "" takes their swamp login away.
+     */
     async updatePerson(
-      input: { email: string; name?: string; builder?: boolean },
+      input: {
+        email: string;
+        name?: string;
+        builder?: boolean;
+        principal?: string;
+      },
     ): Promise<Person> {
       const found = await actor(input.email, true);
+      const { principal: _, ...rest } = found;
+      const principal = input.principal ?? found.principal ?? "";
       const person: Person = {
-        ...found,
+        ...rest,
         name: input.name?.trim() ?? found.name,
         isBuilder: input.builder ?? found.isBuilder,
+        ...(principal && { principal }),
       };
+      if (input.principal !== undefined) {
+        await checkPrincipal(input.principal, person);
+      }
       await store.savePerson(person);
       return person;
     },
 
     actor,
+
+    /**
+     * Who is signed in to swamp serve as `principal`, by the people list.
+     * Anyone not on it, or on it without that login, is refused.
+     */
+    async signedIn(principal: string): Promise<Person> {
+      const person = principal.startsWith("user:")
+        ? (await store.allPeople()).find((p) =>
+          p.principal === principal && !p.standIn
+        )
+        : undefined;
+      if (!person) {
+        throw new DomainError(
+          "not_allowed",
+          principal.startsWith("user:")
+            ? `${principal} isn't anyone in Capture's people list, so it can't take steps here. Ask whoever runs Capture to set it on you with update_person principal=${principal}.`
+            : "Capture can't tell who you are: sign in to swamp serve to take steps here.",
+        );
+      }
+      return person;
+    },
 
     /**
      * Logs a request. `requester`, when given, is the person who asked: they
@@ -758,12 +819,14 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
       const counts: ImportCounts = {
         peopleAdded: 0,
         peopleSkipped: 0,
+        loginsDropped: 0,
+        loginsCarried: 0,
         requestsAdded: 0,
         requestsSkipped: 0,
         requestsNumbered: 0,
       };
       const people = await store.allPeople();
-      for (const incoming of snapshot.people) {
+      for (const incoming of parsed.data.people) {
         const email = incoming.email.trim().toLowerCase();
         if (
           people.some((p) => p.email === email || p.userId === incoming.userId)
@@ -771,7 +834,18 @@ export function createServices({ store, clock, newId, appUrl }: ServiceDeps) {
           counts.peopleSkipped++;
           continue;
         }
-        const person = { ...incoming, email };
+        // A login is one person's, and never a stand-in's, so one already
+        // held here stays with its holder and the newcomer comes in without it.
+        const { principal, ...rest } = incoming;
+        const keeps = principal !== undefined && !incoming.standIn &&
+          !people.some((p) => p.principal === principal);
+        if (principal !== undefined && !keeps) counts.loginsDropped++;
+        if (keeps) counts.loginsCarried++;
+        const person: Person = {
+          ...rest,
+          email,
+          ...(keeps && { principal }),
+        };
         await store.savePerson(person);
         people.push(person);
         counts.peopleAdded++;

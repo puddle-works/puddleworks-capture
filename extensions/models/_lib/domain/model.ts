@@ -42,7 +42,15 @@ export interface Person {
   email: string;
   isBuilder: boolean;
   standIn?: StandInRole;
+  /**
+   * Their swamp serve login, such as `user:alice`: the Capture app acts as
+   * them when that login runs one of its steps. Absent: the app can't.
+   */
+  principal?: string;
 }
+
+/** A swamp serve login as serve names a signed-in user, such as user:alice. */
+export const PRINCIPAL_PATTERN = /^user:\S{1,200}$/;
 
 /** Name and email are copied when someone joins, so exports read the same later. */
 export interface Participant {

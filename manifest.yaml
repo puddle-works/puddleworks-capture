@@ -1,6 +1,6 @@
 manifestVersion: 1
 name: "@puddleworks/capture"
-version: "2026.11.25.1"
+version: "2026.11.27.1"
 description: |
   Capture turns what someone asks for into an agreed outcome spec. A request
   is raised as a draft, discussed by its outcome owner and builders, given a
@@ -35,9 +35,11 @@ description: |
 
   ## Apps
 
-  - `@puddleworks/capture`: the same read-only page in the swamp dashboard
-    and under swamp serve. It asks only for `data:read` and sends nothing
-    to any site.
+  - `@puddleworks/capture`: the same page in the swamp dashboard and under
+    swamp serve, where the signed-in person takes their steps as Slack
+    offers them. It acts as the person whose swamp login is theirs in the
+    people list (update_person principal=user:…), through
+    @puddleworks/capture-app-step, and sends nothing to any site.
 
   ## Workflows
 
@@ -45,6 +47,9 @@ description: |
     another tool, such as puddlerouter, keyed on where it came from, and
     owned by the person who asked (`requester`). A phrase it was asked as
     starts the draft spec's recipe, and stays its first example.
+  - `@puddleworks/capture-app-step`: one of the Capture app's steps, as the
+    person signed in to swamp serve (run.initiatedBy). The app runs only
+    this.
   - `@puddleworks/capture-review-spec`: have an agent review the
     specification up for agreement; its findings become questions the outcome
     owner must settle before agreeing. Bring your own agent behavior, such as
@@ -68,6 +73,7 @@ workflows:
   - workflow-capture-log-request.yaml
   - workflow-capture-review-spec.yaml
   - workflow-capture-stand-in.yaml
+  - workflow-capture-app-step.yaml
 additionalFiles:
   - README.md
   - docs/slack/capture-app-manifest.yaml

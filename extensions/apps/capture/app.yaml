@@ -3,9 +3,11 @@ title: "Capture"
 entry: dist/index.html
 bridge: 1
 platform: "1.4"
-# Read-only: the app reads Capture's requests and people with data.query and
-# hears of changes with data.subscribe. It starts no workflow and runs no
-# method; every change goes through the requests behavior's methods.
+# The app reads Capture's requests and people with data.query and hears of
+# changes with data.subscribe. It takes steps only by running the
+# @puddleworks/capture-app-step workflow, which acts as the person serve
+# says started the run, by their swamp login in the people list. It runs no
+# method itself.
 capabilities: [data:read]
-run: []
+run: ["@puddleworks/capture-app-step"]
 methods: []

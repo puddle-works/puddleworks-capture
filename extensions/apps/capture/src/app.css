@@ -47,3 +47,69 @@
 .status-strip li.failed {
   color: var(--color-danger);
 }
+.app-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.app-panel button {
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-hover);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.app-panel button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.app-panel button.primary {
+  border-color: var(--color-accent, #4c8bf5);
+  color: var(--color-accent, #4c8bf5);
+}
+.app-panel button.danger {
+  color: var(--color-danger);
+}
+.app-panel button.quiet {
+  border-color: transparent;
+  color: var(--color-text-secondary);
+}
+.app-panel button.raise {
+  margin-left: auto;
+}
+.app-form {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+.app-field {
+  display: grid;
+  gap: 4px;
+}
+.app-field small {
+  color: var(--color-text-tertiary);
+}
+.app-field input,
+.app-field textarea,
+.app-field select {
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-hover);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+.app-flash {
+  margin: 8px 0;
+  color: var(--color-text-secondary);
+}
+.app-flash.error,
+.app-refused {
+  color: var(--color-danger);
+}
+.app-more {
+  color: var(--color-text-tertiary);
+}
