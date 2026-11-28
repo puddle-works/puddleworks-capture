@@ -73,3 +73,5 @@
 
 sync:
     remote: "git+https://github.com/puddle-works/puddleworks-capture"
+export:
+    auto: true
