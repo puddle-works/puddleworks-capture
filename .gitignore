@@ -28,3 +28,10 @@ web/dist/
 
 # The Factory, checked out by CI for the build-result/v1 contract test
 /factory
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*

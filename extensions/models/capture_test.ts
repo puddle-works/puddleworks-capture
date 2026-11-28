@@ -1399,3 +1399,143 @@ describe("arguments given as JSON text", () => {
       .toBe(1);
   });
 });
+
+// Olive is both requester and builder, signed in as user:alice, with both
+// stand-in agents listed. `next` asks app_stand_in after a step and frees
+// the request again, so each step is judged on its own.
+async function soloOwner() {
+  const { swamp, run } = setup({ standInAgent: "stand-in-agent" });
+  await run("add_person", {
+    email: "olive@example.com",
+    name: "Olive Owner",
+    builder: "true",
+    principal: "user:alice",
+  });
+  for (const role of ["builder", "requester"]) {
+    await run("add_person", {
+      email: `${role}-agent@example.com`,
+      name: `${role} agent`,
+      standIn: role,
+    });
+  }
+  const app = (input: Record<string, unknown>) =>
+    run("app_step", { principal: "user:alice", ...input });
+  const raise = async (title: string) => {
+    const raised = await app({ step: "raise", title, description: "" });
+    const id = String(swamp.data(raised.dataHandles.at(-1)!.name)!.id);
+    await app({ step: "submit", id });
+    return id;
+  };
+  const next = async (step: string, id: string) => {
+    const out = await run("app_stand_in", {
+      principal: "user:alice",
+      step,
+      id,
+    });
+    const found = swamp.data(
+      out.dataHandles.find((h) => h.name.startsWith("stand-in-next-"))!.name,
+    )!;
+    if (found.lock) {
+      await run("app_stand_in_done", {
+        principal: "user:alice",
+        id,
+        lock: found.lock,
+      });
+    }
+    return found;
+  };
+  return { swamp, run, app, raise, next };
+}
+
+describe("stand-in turns after the Capture app's steps", () => {
+  it("brings in the builder agent on duplicates when a submitted request may repeat another", async () => {
+    const { raise, next } = await soloOwner();
+    const first = await raise("Weekly stock counts report");
+    expect(await next("submit", first)).toMatchObject({
+      due: true,
+      standInAs: "builder-agent@example.com",
+      point: "clarify",
+    });
+    const second = await raise("Stock counts report for the week");
+    expect(await next("submit", second)).toMatchObject({
+      due: true,
+      id: second,
+      standInAs: "builder-agent@example.com",
+      point: "duplicates",
+    });
+  });
+
+  it("brings in a stand-in after asking for changes, editing the spec and resolving a question", async () => {
+    const { swamp, run, app, raise, next } = await soloOwner();
+    const id = await raise("Stock counts");
+    const builderTurn = {
+      due: true,
+      agent: "stand-in-agent",
+      standInAs: "builder-agent@example.com",
+    };
+    await app({
+      step: "editSpecification",
+      id,
+      specification: JSON.stringify(goodSpec),
+    });
+    expect(await next("editSpecification", id)).toMatchObject({
+      ...builderTurn,
+      point: "",
+    });
+    await run("post_message", {
+      as: "olive@example.com",
+      id,
+      kind: "question",
+      body: "Which stockroom?",
+    });
+    const messages = swamp.data(`request-${id}`)!.messages as {
+      id: string;
+      kind: string;
+    }[];
+    const questionId = messages.find((m) => m.kind === "question")!.id;
+    await app({ step: "resolveQuestion", id, questionId });
+    expect(await next("resolveQuestion", id)).toMatchObject({
+      ...builderTurn,
+      point: "",
+    });
+    await app({ step: "propose", id });
+    await app({ step: "requestChanges", id, note: "Name the stockroom." });
+    expect(await next("requestChanges", id)).toMatchObject({
+      ...builderTurn,
+      point: "proposal",
+    });
+  });
+
+  it("brings in the requester agent once the spec is agreed", async () => {
+    const { swamp, app, raise, next } = await soloOwner();
+    const id = await raise("Stock counts");
+    await app({
+      step: "editSpecification",
+      id,
+      specification: JSON.stringify(goodSpec),
+    });
+    await app({ step: "propose", id });
+    expect(await next("reply", id)).toMatchObject({
+      due: true,
+      standInAs: "builder-agent@example.com",
+    });
+    await app({ step: "agree", id, version: 1 });
+    expect(swamp.data(`request-${id}`)).toMatchObject({ status: "agreed" });
+    await app({ step: "reply", id, body: "Over to me to build it." });
+    expect(await next("reply", id)).toMatchObject({
+      due: true,
+      agent: "stand-in-agent",
+      standInAs: "requester-agent@example.com",
+      point: "",
+    });
+  });
+
+  it("brings in no stand-in on instances whose settings predate standInAgent", () => {
+    const old = { appUrl: "http://127.0.0.1:3002", defaultAs: "a@example.com" };
+    const upgraded = model.upgrades.at(-1)!.upgradeAttributes(old);
+    expect(model.globalArguments.parse(upgraded)).toEqual({
+      ...old,
+      standInAgent: "",
+    });
+  });
+});
