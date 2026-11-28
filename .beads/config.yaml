@@ -72,6 +72,6 @@
 # - github.token    → use GITHUB_TOKEN env var instead
 
 sync:
-    remote: "git+https://github.com/puddle-works/puddleworks-capture"
+  remote: "git+https://github.com/puddle-works/puddleworks-capture"
 export:
-    auto: true
+  auto: true
